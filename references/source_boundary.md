@@ -43,6 +43,23 @@
 | 4 只样本时点筛查 | 茅台 `low`、宁德时代 `low`、工商银行/平安银行 `not_applicable` |
 | 20 只样本 + JSON + Parquet | 校验器均 `PASS`（14 `evaluated` / 6 `not_applicable`） |
 | 3 个信号日回测管线 | 端到端跑通，收益覆盖率 100% |
+| 全市场股票池发现 | `get_stock_detail` 返回 **5182** 只沪深 A 股（`as_of=20251231`） |
+| 300 只随机样本时点筛查 | `evaluated` 279 / `insufficient_data` 13 / `not_applicable` 8；平均覆盖率 **0.9324**；`low` 199 / `medium` 74 / `high` 6 |
+| 300 只样本缺失原因分布 | `missing_industry` 9、`insufficient_coverage` 4、`missing_inventory_evidence` 3、`insufficient_gross_margin_history` 1、`missing_receivable_evidence` 1 |
+
+### 缺失原因的读法
+
+上表中 `nonpositive_net_profit_in_window`（94）与 `nonpositive_previous_base`（55）是**旗标级**
+缺失原因，出现在 `flag_details` 里，不必然导致 `insufficient_data`——只要整体覆盖率仍 ≥ 60%，
+结果仍是 `evaluated`。真正把股票推向 `insufficient_data` 的是**全局**原因
+（`missing_industry`、`insufficient_coverage`、`insufficient_annual_history` 等）。
+这正是三态设计的目的："某一项算不出来"与"整体不可判断"是两回事。
+
+### 网络健壮性
+
+全市场 `get_stock_detail` 负载较大，实测出现过 `IncompleteRead` 与超时。provider 对
+瞬时网络错误（`IncompleteRead` / timeout / connection reset）做指数退避重试，并把
+该接口的超时提高到 180 秒、只请求 `symbol / listed_date / de_listed_date` 三列。
 
 ### 样本量警示
 

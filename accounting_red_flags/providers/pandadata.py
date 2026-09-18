@@ -250,8 +250,22 @@ class PandaDataProvider:
             except Exception as exc:
                 message = str(exc)
                 rate_limited = "500010" in message or "请求次数超限" in message
-                if rate_limited and attempt + 1 < retries:
-                    time.sleep(min(60, 15 * (attempt + 1)))
+                transient = any(
+                    token in message
+                    for token in (
+                        "IncompleteRead",
+                        "timed out",
+                        "Timeout",
+                        "timedout",
+                        "Connection",
+                        "RemoteDisconnected",
+                        "ConnectionReset",
+                        "Unexpected error",
+                    )
+                )
+                if (rate_limited or transient) and attempt + 1 < retries:
+                    backoff = min(60.0, (15.0 if rate_limited else 4.0) * (attempt + 1))
+                    time.sleep(backoff)
                     continue
                 raise ProviderError(f"{name} failed: {type(exc).__name__}: {exc}") from exc
         return pd.DataFrame()
@@ -288,8 +302,13 @@ class PandaDataProvider:
 
     # --- high level loaders ------------------------------------------------
 
-    def discover_universe(self, as_of: str) -> list[str]:
-        frame = self.fetch("get_stock_detail", status=None)
+    def discover_universe(self, as_of: str, *, timeout: float = 180) -> list[str]:
+        frame = self.fetch(
+            "get_stock_detail",
+            timeout=timeout,
+            status=None,
+            fields=["symbol", "listed_date", "de_listed_date"],
+        )
         universe = filter_a_share_universe(frame, as_of)
         if not universe:
             raise ProviderError("get_stock_detail returned no A-share universe")

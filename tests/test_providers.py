@@ -117,3 +117,37 @@ def test_unknown_api_is_rejected(monkeypatch):
     provider._authenticated = True
     with pytest.raises(Exception):
         provider.fetch("definitely_not_a_panda_api")
+
+
+def test_fetch_retries_transient_network_errors(monkeypatch):
+    provider = PandaDataProvider(username="u", password="p")
+    provider._authenticated = True
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    calls = {"count": 0}
+
+    def flaky(api, kwargs, timeout):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise ConnectionError("IncompleteRead(2766258 bytes read)")
+        return pd.DataFrame({"symbol": ["600001.SH"], "listed_date": ["20100101"]})
+
+    monkeypatch.setattr(provider, "_throttled_call", flaky)
+    frame = provider.fetch("get_stock_detail", status=None)
+    assert calls["count"] == 2
+    assert len(frame) == 1
+
+
+def test_fetch_does_not_retry_permanent_errors(monkeypatch):
+    provider = PandaDataProvider(username="u", password="p")
+    provider._authenticated = True
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    calls = {"count": 0}
+
+    def failing(api, kwargs, timeout):
+        calls["count"] += 1
+        raise ValueError("200103 API访问权限不足")
+
+    monkeypatch.setattr(provider, "_throttled_call", failing)
+    with pytest.raises(Exception):
+        provider.fetch("get_stock_detail", status=None)
+    assert calls["count"] == 1
