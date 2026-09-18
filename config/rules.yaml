@@ -1,0 +1,64 @@
+# Accounting Red Flag Detector - rule configuration
+#
+# Every threshold the deterministic rule engine uses lives here. The engine
+# never hard-codes a numeric threshold. Changing this file changes the
+# rule-config hash embedded in every result, so old artifacts stay auditable.
+#
+# Version fields must match accounting_red_flags/config.py; the validator
+# refuses results whose embedded versions differ from the running code.
+
+rules_version: "1.0.0"
+schema_version: "1.0.0"
+
+# --- History window -------------------------------------------------------
+# Annual (q4) reports are the evidence base. We request history_years of
+# annual reports and require at least min_annual_reports of them to be visible.
+history_years: 6
+min_annual_reports: 2
+# Gross-margin anomaly uses a baseline of prior years (latest excluded).
+gross_margin_min_history: 3
+gross_margin_max_history: 5
+# Multi-year cash-conversion deterioration window.
+deterioration_years: 3
+
+# --- RF01 profit / cash-flow divergence -----------------------------------
+cash_conversion_min: 0.80          # CFO / net profit must be >= this
+
+# --- RF02 receivables growing faster than revenue -------------------------
+receivable_growth_min: 0.20        # AR growth must exceed this to trigger
+receivable_gap_min: 0.20           # AR growth - revenue growth (percentage points)
+
+# --- RF03 inventory growing faster than revenue ---------------------------
+inventory_growth_min: 0.20
+inventory_gap_min: 0.20
+
+# --- RF04 excessive accruals ----------------------------------------------
+accrual_ratio_max: 0.10            # (net profit - CFO) / avg total assets
+
+# --- RF05 gross-margin anomaly --------------------------------------------
+gross_margin_abs_change_min: 0.05  # absolute percentage-point move floor
+gross_margin_zscore_min: 2.0       # or this many baseline std-devs
+
+# --- RF06 profit growth / revenue growth divergence -----------------------
+profit_growth_min: 0.30
+profit_revenue_gap_min: 0.30
+
+# --- RF07 multi-year cash-conversion deterioration ------------------------
+deterioration_latest_max: 0.80     # latest CFO / net profit below this
+
+# --- Risk classification --------------------------------------------------
+# 0-1 flags -> low, 2-3 -> medium, >=4 -> high. Coverage below coverage_min
+# is reported as insufficient_data (fail closed) instead of low risk.
+risk_medium_flags: 2
+risk_high_flags: 4
+coverage_min: 0.60
+
+# --- Industry scope -------------------------------------------------------
+# V1 targets non-financial companies. Financial balance sheets are excluded
+# with an explicit not_applicable status rather than forced through
+# industrial rules. Shenwan L1 codes: 801780 banking, 801790 non-bank
+# financials (securities, insurance, diversified financials).
+excluded_industry_codes:
+  - "801780"
+  - "801790"
+excluded_industry_pattern: "银行|保险|证券|非银金融|信托|多元金融"

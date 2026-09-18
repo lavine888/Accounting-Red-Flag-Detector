@@ -1,0 +1,28 @@
+name: Validate Skill
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 校验 qsh-form
+        run: node scripts/validate-qsh-form.mjs SKILL.md
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Offline fixture smoke test
+        run: |
+          python scripts/build.py --as-of 20251231 --all-a --provider fixture \
+            --json-output output/ci-fixture.json
+          python scripts/validate.py output/ci-fixture.json

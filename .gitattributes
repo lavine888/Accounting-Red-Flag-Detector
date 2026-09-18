@@ -1,0 +1,5 @@
+# Normalize line endings for a cross-platform Python project.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.parquet binary

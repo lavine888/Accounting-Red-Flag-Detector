@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Never commit generated full-market artifacts, caches or raw data
+output/
+*.parquet
+*.tmp
+panda-cache/
+real_runs/
+sources/
+prices/
+
+# Local secrets / environment
+.env
+.env.*
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
