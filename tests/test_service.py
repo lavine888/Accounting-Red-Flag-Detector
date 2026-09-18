@@ -49,7 +49,7 @@ def test_metadata_is_internally_consistent(result):
     ).hexdigest()
     assert result["rule_config_hash"] == expected_config_hash
     assert result["rule_config_hash"] == config_hash(load_rule_config())
-    assert result["rules_version"] == "1.0.0"
+    assert result["rules_version"] == RULES_VERSION
     assert result["schema_version"] == SCHEMA_VERSION
     expected_universe = hashlib.sha256(
         "\n".join(sorted(SYMBOLS)).encode("utf-8")

@@ -8,7 +8,8 @@
 
 | 声明 | 证据等级 | 依据 |
 | --- | --- | --- |
-| 规则引擎是确定性的、可复现的 | 已用真实数据验证 | 160 个测试；同一输入产生同一 `dataset_version` |
+| 规则引擎是确定性的、可复现的 | 已用真实数据验证 | 165 个测试；同一输入产生同一 `dataset_version` |
+| 缺失或陈旧的证据不会被当成低风险 | 已用真实数据验证 | 覆盖率低于 60% 或最新年报超过 `max_evidence_age_years` 一律 fail closed 为 `insufficient_data` |
 | 产物被篡改后无法通过校验 | 已用真实数据验证 | 校验器从 `annual_history` 重跑引擎并逐字段比对；诊断、`score`/`rank`/`confidence`、数据来源一致性均在覆盖范围内 |
 | 时点筛选不使用未来信息 | 已用真实数据验证 | `select_visible_revisions` 按 `announcement_date` 过滤；测试覆盖未来报告排除 |
 | 缺失数据不会被当作 0 | 已用真实数据验证 | 三态旗标 + 覆盖率 fail-closed；对抗性测试 |

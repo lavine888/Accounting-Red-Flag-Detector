@@ -27,16 +27,6 @@ from .metrics import (
 from .models import FLAG_NAMES, FlagResult, RiskLevel, Status
 from .util import clean_symbol
 
-GLOBAL_MISSING_REASONS = (
-    "missing_industry",
-    "conflicting_latest_revisions",
-    "missing_adjustment_flag",
-    "invalid_adjustment_flag",
-    "no_visible_annual_reports",
-    "insufficient_annual_history",
-    "insufficient_coverage",
-)
-
 
 def _value(row: Mapping[str, Any], key: str) -> float | None:
     return finite(row.get(key))
@@ -398,6 +388,17 @@ def evaluate_symbol(
     prior_is_consecutive = bool(prior) and int(prior["year"]) == (latest_year - 1 if latest_year else None)
     effective_prior = prior if prior_is_consecutive else None
 
+    # Fail closed on stale evidence: a company that has stopped filing must not
+    # be classified as low risk from an annual report that is years old. This
+    # is the freshness counterpart of the coverage floor.
+    as_of_year = int(str(as_of)[:4]) if str(as_of)[:4].isdigit() else None
+    if (
+        as_of_year is not None
+        and latest_year is not None
+        and as_of_year - latest_year > config.max_evidence_age_years
+    ):
+        global_reasons.append("stale_annual_evidence")
+
     details = {
         "cash_conversion": flag_cash_conversion(latest, config).to_dict() if latest else FlagResult("cash_conversion", None, reason="no_visible_annual_reports").to_dict(),
         "receivable_divergence": flag_receivable_divergence(latest, effective_prior, config).to_dict() if latest else FlagResult("receivable_divergence", None, reason="no_visible_annual_reports").to_dict(),
@@ -466,6 +467,12 @@ def _record(
 
     latest = annual[-1] if annual else {}
     prior = annual[-2] if len(annual) >= 2 else {}
+    as_of_text = str(as_of)[:4]
+    evidence_age_years = (
+        int(as_of_text) - int(latest["year"])
+        if latest and as_of_text.isdigit() and latest.get("year") is not None
+        else None
+    )
     cash_series = details["cash_conversion_deterioration"]["evidence"].get("cash_conversion_series")
     if cash_series is None:
         cash_series = [
@@ -491,6 +498,7 @@ def _record(
         "profit_growth": details["profit_revenue_divergence"]["evidence"].get("profit_growth"),
         "growth_gap": details["profit_revenue_divergence"]["evidence"].get("growth_gap"),
         "cash_conversion_series": cash_series,
+        "evidence_age_years": evidence_age_years,
     }
 
     return {

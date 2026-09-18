@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-RULES_VERSION = "1.0.0"
-SCHEMA_VERSION = "1.1.0"
+RULES_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 SKILL_ID = "ARFD-LAVINE"
 SKILL_NAME = "Accounting Red Flag Detector - Lavine Version"
 DEFAULT_RULES_PATH = Path(__file__).resolve().parents[1] / "config" / "rules.yaml"
@@ -27,6 +27,9 @@ class RuleConfig:
     # history window
     history_years: int = 6
     min_annual_reports: int = 2
+    # Fail closed when the newest visible annual report is older than this many
+    # years relative to ``as_of``. A delinquent filer must never read as "low".
+    max_evidence_age_years: int = 2
     gross_margin_min_history: int = 3
     gross_margin_max_history: int = 5
     deterioration_years: int = 3

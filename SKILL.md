@@ -1,6 +1,6 @@
 ---
 name: accounting-red-flag-detector-lavine-version
-description: "PandaData-only, point-in-time A-share accounting red-flag detector covering seven forensic rules (cash conversion, receivables/inventory divergence, accruals, gross-margin anomaly, profit-revenue divergence, multi-year cash-conversion deterioration) with three-state flags, fail-closed coverage, financial-industry exclusion and auditable JSON/Parquet evidence. Use when an agent needs an accounting-quality screen, historical signal reconstruction or forward-return research without future information."
+description: "PandaData-only, point-in-time A-share accounting red-flag detector covering seven forensic rules (cash conversion, receivables/inventory divergence, accruals, gross-margin anomaly, profit-revenue divergence, multi-year cash-conversion deterioration) with three-state flags, fail-closed coverage and evidence freshness, financial-industry exclusion and auditable JSON/Parquet evidence. Use when an agent needs an accounting-quality screen, historical signal reconstruction or forward-return research without future information."
 quantSkills:
   organization: https://github.com/lavine888
   repository: lavine888/Accounting-Red-Flag-Detector
@@ -66,7 +66,7 @@ Use this skill to run a point-in-time accounting-quality screen over China A-sha
 4. Normalize each visible period into annual (q4) evidence: revenue, operating cost, parent net profit, operating cash flow, receivables, inventory, total assets.
 5. Resolve Shenwan L1 industry membership valid on the decision date. Financial industries (banking `801780`, non-bank financials `801790`, or matching names) return `not_applicable`.
 6. Evaluate the seven red flags. Each is `true`, `false`, or `null` (missing evidence). Nothing is imputed.
-7. Classify risk: 0–1 flags `low`, 2–3 `medium`, ≥ 4 `high`; coverage below 60% is `insufficient_data` (fail closed).
+7. Classify risk: 0–1 flags `low`, 2–3 `medium`, ≥ 4 `high`; coverage below 60% or evidence older than `max_evidence_age_years` (default 2 years) is `insufficient_data` (fail closed).
 8. Emit JSON and/or the versioned production Parquet factor table with full evidence and provenance.
 
 ## Hard Rules
@@ -88,7 +88,7 @@ All thresholds live in `config/rules.yaml`; the engine never hard-codes a number
 - **Point-in-time**: selection is driven by `announcement_date`, never by fiscal period alone.
 - **Three-state**: `null` means "no conclusion allowed", not "no problem".
 - **No zero-fill**: a missing field never becomes `0`; growth rates over a non-positive base return `null`.
-- **Fail-closed**: missing industry, conflicting revisions, missing adjustment flag, fewer than two annual reports, or coverage below 60% all produce `insufficient_data`.
+- **Fail-closed**: missing industry, conflicting revisions, missing adjustment flag, fewer than two annual reports, coverage below 60%, or a latest annual report older than `max_evidence_age_years` all produce `insufficient_data`.
 - **Financials out of scope**: banks, insurers and brokers are `not_applicable`, never forced through industrial rules.
 - **Auditable**: every record carries `flag_details` (value, threshold, reason), `evidence`, `announcement_dates`, `report_versions` and `missing_reasons`.
 
@@ -121,6 +121,7 @@ The validator re-derives every aggregate and every risk level, then re-runs the 
 | No visible annual report | `insufficient_data` (`no_visible_annual_reports`) |
 | Fewer than two annual reports | `insufficient_data` (`insufficient_annual_history`) |
 | Evidence coverage < 60% | `insufficient_data` (`insufficient_coverage`) |
+| Latest annual report older than `max_evidence_age_years` | `insufficient_data` (`stale_annual_evidence`) |
 | Same-day conflicting revisions | `insufficient_data` (`conflicting_latest_revisions`) |
 | Missing industry membership | `insufficient_data` (`missing_industry`) |
 | Missing / invalid adjustment flag | `insufficient_data` |

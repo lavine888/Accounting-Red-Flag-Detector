@@ -118,7 +118,7 @@ accounting_red_flags/
   research/{forward_returns,diagnostics,backtest}.py
 config/rules.yaml
 scripts/{build,validate,backtest}.py
-tests/               160 tests
+tests/               165 tests
 references/          methodology / data guide / source boundary
 production/SKILL.md  production deployment contract
 ```

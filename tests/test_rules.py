@@ -241,6 +241,37 @@ def test_clean_company_is_low_risk_with_full_coverage():
     assert record["available_rule_count"] == 7
     assert record["coverage_ratio"] == 1.0
     assert record["missing_reasons"] == []
+    assert record["evidence"]["evidence_age_years"] == 1
+
+
+def test_stale_annual_evidence_fails_closed():
+    # Latest visible report is FY2021; screened at end of 2025 -> four years old.
+    record = _evaluate(series([2020, 2021]), {"industry_code": "801080"})
+    assert record["status"] == Status.INSUFFICIENT_DATA.value
+    assert record["risk_level"] == RiskLevel.INSUFFICIENT_DATA.value
+    assert "stale_annual_evidence" in record["missing_reasons"]
+    assert record["evidence"]["evidence_age_years"] == 4
+
+
+def test_evidence_age_boundary_is_inclusive():
+    # Exactly max_evidence_age_years (2) is accepted; one more year fails closed.
+    accepted = _evaluate(series([2022, 2023]), {"industry_code": "801080"})
+    assert "stale_annual_evidence" not in accepted["missing_reasons"]
+    rejected = _evaluate(series([2021, 2022]), {"industry_code": "801080"})
+    assert "stale_annual_evidence" in rejected["missing_reasons"]
+
+
+def test_max_evidence_age_is_configurable():
+    strict = RuleConfig(max_evidence_age_years=0)
+    record = _evaluate(_clean_series(), {"industry_code": "801080"}, config=strict)
+    assert record["status"] == Status.INSUFFICIENT_DATA.value
+    assert "stale_annual_evidence" in record["missing_reasons"]
+
+
+def test_financial_company_is_not_checked_for_freshness():
+    record = _evaluate(series([2020, 2021]), {"industry_code": "801780", "industry_name": "银行"})
+    assert record["status"] == Status.NOT_APPLICABLE.value
+    assert "stale_annual_evidence" not in record["missing_reasons"]
 
 
 def test_financial_company_is_not_applicable():

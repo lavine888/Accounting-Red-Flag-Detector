@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.0 - 2026-09-19
+
+**主题：证据新鲜度 fail-closed。** 新增一条 fail-closed 护栏，并相应提升规则与 schema 版本。
+
+### 修复：陈旧证据被当成低风险
+
+- 此前，只要覆盖率达标，一家最新可见年报已过去多年的公司（例如 `as_of=20251231`
+  而最新年报为 FY2021）会被评为 `evaluated / low`。停止披露、长期停牌、严重延迟
+  申报的公司因此被错误地标记为"干净"。
+- 新增全局 fail-closed 原因 `stale_annual_evidence`：当
+  `as_of` 年份 − 最新年报年份 > `max_evidence_age_years`（默认 2）时，状态与风险
+  等级均为 `insufficient_data`。这是覆盖率下限的"新鲜度"对偶。
+- 证据年龄写入 `evidence.evidence_age_years`，下游可审计。
+- 阈值 `max_evidence_age_years` 位于 `config/rules.yaml`，可配置；金融业分支不受影响。
+
+### 版本
+
+- `RULES_VERSION` `1.0.0` → `1.1.0`（新增一条 fail-closed 规则语义）。
+- `SCHEMA_VERSION` `1.1.0` → `1.2.0`（`evidence` 新增 `evidence_age_years`）。
+- `dataset_version` 前缀随之变化，旧产物需用新代码重跑。
+
+### 测试
+
+- 新增 5 个测试：陈旧证据 fail-closed、年龄边界（恰好 2 年通过、3 年拒绝）、
+  `max_evidence_age_years` 可配置、金融业不参与新鲜度检查、校验器拒绝把陈旧记录
+  改写为 `evaluated`。测试 160 → 165。
+
 ## 1.1.0 - 2026-09-19
 
 **主题：审计完整性（audit integrity）。** 本版不改变任何规则阈值，`RULES_VERSION`

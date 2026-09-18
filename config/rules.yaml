@@ -7,14 +7,18 @@
 # Version fields must match accounting_red_flags/config.py; the validator
 # refuses results whose embedded versions differ from the running code.
 
-rules_version: "1.0.0"
-schema_version: "1.1.0"
+rules_version: "1.1.0"
+schema_version: "1.2.0"
 
 # --- History window -------------------------------------------------------
 # Annual (q4) reports are the evidence base. We request history_years of
 # annual reports and require at least min_annual_reports of them to be visible.
 history_years: 6
 min_annual_reports: 2
+# Fail closed when the newest visible annual report is older than this many
+# years relative to as_of. A company that has stopped filing must be reported
+# as insufficient_data, never as low risk from stale evidence.
+max_evidence_age_years: 2
 # Gross-margin anomaly uses a baseline of prior years (latest excluded).
 gross_margin_min_history: 3
 gross_margin_max_history: 5

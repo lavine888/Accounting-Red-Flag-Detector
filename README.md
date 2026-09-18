@@ -8,6 +8,7 @@
 - **只使用决策日之前已公告的财报**（`announcement_date <= as_of`），杜绝未来函数。
 - **三态旗标**：`true` / `false` / `null`。缺失证据永远是 `null`，绝不填 0。
 - **Fail-closed**：证据覆盖率 < 60% 一律判为 `insufficient_data`，而不是"低风险"。
+- **证据新鲜度 fail-closed**：最新可见年报比 `as_of` 落后超过 `max_evidence_age_years`（默认 2）同样判为 `insufficient_data`，停止披露的公司不会凭多年前的旧报表被评为低风险。
 - **金融业排除**：银行 / 保险 / 证券等金融行业返回 `not_applicable`，不硬套工业规则。
 - **全部阈值集中在 `config/rules.yaml`**，代码中不存在魔法数字。
 
@@ -21,6 +22,7 @@
 | --- | --- | --- |
 | 用最新财报回看历史 | 未来函数，回测虚高 | 按公告日做时点筛选，同一天冲突版本直接 fail closed |
 | 缺失值填 0 | 把"没有数据"当成"没有问题" | 缺失 = `null`，并降低覆盖率，触发 `insufficient_data` |
+| 用多年前的旧报表给当前打分 | 已停止披露的公司被误判为低风险 | 证据年龄 > `max_evidence_age_years` 直接 fail closed |
 | 所有行业一套阈值 | 银行没有"营业成本""存货" | 金融业显式 `not_applicable` |
 
 ---
@@ -49,6 +51,7 @@
 | 2–3 | `medium` | `watch` |
 | ≥ 4 | `high` | `review` |
 | 覆盖率 < 60% | `insufficient_data` | `unknown` |
+| 最新年报过旧（年龄 > 2 年） | `insufficient_data` | `unknown` |
 | 金融行业 | `not_applicable` | `not_applicable` |
 
 > 风险等级是**证据强度**的分级，不是买卖建议，也不是收益预测。
@@ -125,9 +128,9 @@ python scripts/backtest.py \
 {
   "skill_id": "ARFD-LAVINE",
   "as_of": "20251231",
-  "dataset_version": "20251231-1.1.0-<hash16>",
-  "rules_version": "1.0.0",
-  "schema_version": "1.1.0",
+  "dataset_version": "20251231-1.2.0-<hash16>",
+  "rules_version": "1.1.0",
+  "schema_version": "1.2.0",
   "rule_config_hash": "<sha256>",
   "source_snapshot": "<sha256>",
   "universe_hash": "<sha256>",
@@ -146,7 +149,7 @@ python scripts/backtest.py \
       "evidence": { "net_profit": 0, "operating_cash_flow": 0, "cash_conversion_ratio": 1.31 },
       "announcement_dates": ["20250430"],
       "missing_reasons": [],
-      "rule_version": "1.0.0"
+      "rule_version": "1.1.0"
     }
   ]
 }
@@ -210,7 +213,7 @@ accounting_red_flags/
     backtest.py          前瞻收益回测
 config/rules.yaml        所有阈值
 scripts/                 build.py / validate.py / backtest.py
-tests/                   160 个测试
+tests/                   165 个测试
 references/              方法论 / 数据指南 / 来源边界
 production/SKILL.md      生产部署契约
 ```

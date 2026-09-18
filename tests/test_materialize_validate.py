@@ -6,7 +6,7 @@ import json
 import pandas as pd
 import pytest
 
-from accounting_red_flags.config import SCHEMA_VERSION
+from accounting_red_flags.config import SCHEMA_VERSION, RuleConfig
 from accounting_red_flags.materialization import production_frame, signal_for, write_production
 from accounting_red_flags.materialization.parquet_writer import PRODUCTION_KEY
 from accounting_red_flags.providers import FixtureProvider
@@ -233,3 +233,24 @@ def test_validate_production_rejects_rewritten_evidence(tmp_path, result):
     frame.loc[row_index, "evidence_json"] = json.dumps(evidence)
     report = validate_production(frame)
     assert report["status"] == "FAIL"
+
+
+def test_validator_rejects_stale_record_rewritten_as_evaluated():
+    config = RuleConfig(max_evidence_age_years=0)
+    result = screen(as_of="20251231", symbols=SYMBOLS, provider=FixtureProvider(), config=config)
+    assert validate_result(result)["status"] == "PASS"
+    stale_symbol = next(
+        record["symbol"]
+        for record in result["records"]
+        if "stale_annual_evidence" in record["missing_reasons"]
+    )
+    tampered = copy.deepcopy(result)
+    target = next(record for record in tampered["records"] if record["symbol"] == stale_symbol)
+    target["status"] = "evaluated"
+    target["risk_level"] = "low"
+    target["missing_reasons"] = [
+        reason for reason in target["missing_reasons"] if reason != "stale_annual_evidence"
+    ]
+    report = validate_result(tampered)
+    assert report["status"] == "FAIL"
+    assert any("recomputed" in error for error in report["errors"])

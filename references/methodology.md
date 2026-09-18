@@ -158,10 +158,13 @@ else:                        low
 | `no_visible_annual_reports` | 无可见年报 |
 | `insufficient_annual_history` | 可见年报少于 `min_annual_reports`（默认 2） |
 | `non_contiguous_annual_history` | 年报年份不连续（如缺 2023） |
+| `stale_annual_evidence` | `as_of` 年份 − 最新年报年份 > `max_evidence_age_years`（默认 2） |
 | `insufficient_coverage` | 覆盖率 < `coverage_min`（默认 0.60） |
 
 注意：`non_contiguous_annual_history` 只在存在 `prior` 但年份不连续时加入；它会强制
-`insufficient_data`，因为 RF02/RF03/RF04/RF06 的"上一年"证据实际上不可用。
+`insufficient_data`，因为 RF02/RF03/RF04/RF06 的“上一年”证据实际上不可用。
+`stale_annual_evidence` 是覆盖率下限的“新鲜度”对偶：一个已停止披露的公司不能凭
+多年前的干净报表被评为低风险。证据年龄写入 `evidence.evidence_age_years`。
 
 ---
 
@@ -178,8 +181,8 @@ else:                        low
 
 ## 10. 版本
 
-- `RULES_VERSION = 1.0.0`：七条规则 + 覆盖率 fail-closed。
-- `SCHEMA_VERSION = 1.1.0`：JSON 与 Parquet 字段契约；`dataset_version` 同时绑定
+- `RULES_VERSION = 1.1.0`：七条规则 + 覆盖率 fail-closed + 证据新鲜度 fail-closed。
+- `SCHEMA_VERSION = 1.2.0`：JSON 与 Parquet 字段契约；`dataset_version` 同时绑定
   `rules_version`，规则逻辑版本变化即使阈值不变也会产生新的数据集版本。
 
 阈值变更 → `rule_config_hash` 变更 → 旧产物校验失败，需要显式迁移。

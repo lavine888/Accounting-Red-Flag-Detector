@@ -3,6 +3,13 @@
 > 原则不变：**Agent investigates. Rules decide. Evidence explains.**
 > 缺失数据永不猜成 0；证据不足永不降级成"低风险"。
 
+## 已完成 1.2.0：证据新鲜度
+
+- 新增 `stale_annual_evidence` fail-closed：最新年报比 `as_of` 落后超过
+  `max_evidence_age_years`（默认 2）时，状态与风险等级均为 `insufficient_data`。
+- `evidence.evidence_age_years` 写入证据，阈值可配置；金融业分支不受影响。
+- 校验器重算会自动拒绝把陈旧记录改写为 `evaluated`。
+
 ## 已完成 1.1.0：审计完整性
 
 - 校验器从"比对聚合"升级为"用记录自带年报历史重跑规则引擎并逐字段比对"。

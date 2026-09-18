@@ -128,7 +128,7 @@ PY
 | 限流（`500010`） | 提高 `--request-interval`，降低 `--workers` |
 | 缓存损坏 | provider 校验 `frame_sha256`，不匹配自动重取 |
 | 校验 `FAIL` | **不得发布**；定位到具体 `errors` 后重跑 |
-| `insufficient_data` 异常升高 | 检查 `insufficient_reason_counts`，通常是行业数据缺失 |
+| `insufficient_data` 异常升高 | 检查 `insufficient_reason_counts`；`missing_industry` 通常是行业数据缺失，`stale_annual_evidence` 则是公司停止披露或 `as_of` 选得过晚 |
 
 ---
 
