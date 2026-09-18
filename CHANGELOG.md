@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.3.0 - 2026-09-19
+
+**主题：行业相对证据（peer context）。** 回应“行业中性化缺失”的已知局限，但以
+**只增不减、不改变判定**的方式落地。
+
+### 新增：`peer_context`（附加行业相对证据）
+
+- RF02/RF03/RF04/RF06 都是与公司自身上年比较，地产、建筑、To-G 等行业的应收
+  账款、存货、应计天然偏高，绝对阈值可能误伤。每条记录现在附带 `peer_context`：
+  该公司在**申万一级同行业**中的 `peer_count` / `peer_median` / `peer_percentile`。
+- 参与比较的指标：`receivable_gap`、`inventory_gap`、`accrual_ratio`、`growth_gap`。
+  `peer_percentile` = 同行业中严格小于本公司取值的样本占比。
+- 样本池为所有非金融、且该指标有限的公司；金融业 `not_applicable` 不入池。行业样本
+  < `peer_min_sample`（默认 5）时该指标直接缺省，绝不猜测。
+- **不改变任何旗标、`risk_level` 或 `signal`**。系统性造假往往整条产业链同时异常，
+  用同行“洗白”会掩盖工具本该暴露的案例；`peer_context` 只供调查者解读。
+- 校验器从**重算证据**独立复算 `peer_context`，篡改即 FAIL。
+
+### 修复：顶层 `revenue_growth` 的证据完整性
+
+- 此前若应收账款缺失（RF02 无法计算）但存货/利润可用，顶层
+  `evidence.revenue_growth` 会错误地读作 `null`。现在跨 RF02/RF03/RF06 取首个
+  非空值，不再因单一规则缺证据而丢失已可得的收入增速。此修复不改变任何判定。
+
+### 版本
+
+- `RULES_VERSION` `1.1.0` → `1.2.0`（引擎输出变化：顶层证据跨规则回退）。
+- `SCHEMA_VERSION` `1.2.0` → `1.3.0`（每条记录新增 `peer_context`）。
+- `dataset_version` 前缀随之变化，旧产物需用新代码重跑。
+
+### 测试
+
+- 新增 11 个测试：`peer_contexts` 纯函数（中位数/分位、最小样本、非有限值、金融与
+  无行业排除、确定性）、服务层（分位上报且可校验、不改变旗标、样本不足时缺省）、
+  校验器拒绝篡改 `peer_context`、`revenue_growth` 跨规则回退。测试 165 → 176。
+
 ## 1.2.0 - 2026-09-19
 
 **主题：证据新鲜度 fail-closed。** 新增一条 fail-closed 护栏，并相应提升规则与 schema 版本。

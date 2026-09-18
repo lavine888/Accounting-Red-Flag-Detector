@@ -203,6 +203,19 @@ def test_validator_catches_tampered_annual_history(result):
     assert report["status"] == "FAIL"
 
 
+def test_validator_catches_tampered_peer_context(result):
+    tampered = copy.deepcopy(result)
+    record = next(item for item in tampered["records"] if item["symbol"] == "600002.SH")
+    record["peer_context"]["metrics"]["receivable_gap"] = {
+        "peer_count": 99,
+        "peer_median": 0.0,
+        "peer_percentile": 0.0,
+    }
+    report = validate_result(tampered)
+    assert report["status"] == "FAIL"
+    assert any("peer_context" in error for error in report["errors"])
+
+
 def test_validator_catches_inconsistent_live_source(result):
     tampered = copy.deepcopy(result)
     tampered["data_source"] = "PandaData"

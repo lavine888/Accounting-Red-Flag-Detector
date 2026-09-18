@@ -39,6 +39,12 @@ A **point-in-time** accounting-quality screener for China A-shares. It applies s
 
 Risk level grades **evidence strength**, not expected return. It is not investment advice.
 
+### Industry-relative evidence (peer context, never changes a verdict)
+
+RF02/RF03/RF04/RF06 compare a company only against its own prior year, so industries with structurally high receivables, inventory or accruals (real estate, construction, government-facing contractors) can be false-positived. Every record carries a `peer_context` block with the company's percentile within its Shenwan L1 industry. When the industry pool is smaller than `peer_min_sample` (default 5) the metric is simply absent, never guessed.
+
+**This is context, not absolution:** `peer_context` never changes a flag or a risk level. The rules decide independently, because systemic fraud often makes a whole value chain look alike — normalising an anomaly away because peers share it would hide exactly the cases the tool exists to surface. The validator recomputes `peer_context` from the re-derived evidence, so tampering fails.
+
 ---
 
 ## 2. Quick start
@@ -86,7 +92,7 @@ The validator **re-derives** every aggregate and every risk level. Hand-edited, 
 
 ### JSON
 
-Top-level run metadata plus one record per company, including `flags` (three-state), `flag_details` (value / threshold / reason), `evidence`, `announcement_dates`, `missing_reasons` and `rule_version`.
+Top-level run metadata plus one record per company, including `flags` (three-state), `flag_details` (value / threshold / reason), `evidence`, `announcement_dates`, `missing_reasons`, `peer_context` (additive industry-relative evidence) and `rule_version`.
 
 ### Parquet (production factor table)
 
@@ -111,14 +117,14 @@ See `references/methodology.md`, `references/data_guide.md`, `references/source_
 
 ```
 accounting_red_flags/
-  config.py models.py metrics.py rules.py service.py util.py
+  config.py models.py metrics.py rules.py cross_section.py service.py util.py
   point_in_time/{reports,universe}.py
   providers/{base,pandadata,fixture}.py
   materialization/{json_writer,parquet_writer}.py
   research/{forward_returns,diagnostics,backtest}.py
 config/rules.yaml
 scripts/{build,validate,backtest}.py
-tests/               165 tests
+tests/               176 tests
 references/          methodology / data guide / source boundary
 production/SKILL.md  production deployment contract
 ```
@@ -131,9 +137,9 @@ production/SKILL.md  production deployment contract
 python -m pytest -q
 ```
 
-Covers threshold boundaries, missing-value handling, point-in-time selection, same-day revision conflicts, financial exclusion, coverage fail-closed, risk-classification boundaries, Parquet upsert, and adversarial validator tests.
+Covers threshold boundaries, missing-value handling, point-in-time selection, same-day revision conflicts, financial exclusion, coverage fail-closed, risk-classification boundaries, industry-relative evidence, Parquet upsert, and adversarial validator tests.
 
-The validator does not merely compare aggregates: it **re-runs the rule engine** over each record's own `annual_history` and `thresholds` and compares all derived fields (`flags`, `flag_details`, `evidence`, coverage, risk level, …). Tampering with counts, risk levels, flags, evidence, annual history, diagnostics, `dataset_version`, row-level `score`/`rank`/`confidence` or source consistency fails validation.
+The validator does not merely compare aggregates: it **re-runs the rule engine** over each record's own `annual_history` and `thresholds` and compares all derived fields (`flags`, `flag_details`, `evidence`, coverage, risk level, …). Tampering with counts, risk levels, flags, evidence, annual history, diagnostics, `dataset_version`, `peer_context`, row-level `score`/`rank`/`confidence` or source consistency fails validation.
 
 ---
 

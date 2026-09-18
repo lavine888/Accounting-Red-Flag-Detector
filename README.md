@@ -56,6 +56,17 @@
 
 > 风险等级是**证据强度**的分级，不是买卖建议，也不是收益预测。
 
+### 行业相对证据（peer context，不改变判定）
+
+RF02/RF03/RF04/RF06 都是与公司自身上年比较，地产、建筑、To-G 等行业的应收账款、
+存货、应计天然偏高，可能被误伤。每条记录附带 `peer_context`，给出该公司在**申万
+一级同行业**中的分位，供调查者判断；样本不足 `peer_min_sample`（默认 5）时该指标
+直接缺省，绝不猜测。
+
+**这是上下文，不是免罪符**：`peer_context` 永远不改变任何旗标或风险等级。规则
+仍然独立判定——因为系统性造假往往整条产业链同时异常，用同行“洗白”恰恰会掩盖
+工具本该暴露的案例。`peer_context` 由校验器从重算证据独立复算，篡改即 FAIL。
+
 ---
 
 ## 3. 快速开始
@@ -128,9 +139,9 @@ python scripts/backtest.py \
 {
   "skill_id": "ARFD-LAVINE",
   "as_of": "20251231",
-  "dataset_version": "20251231-1.2.0-<hash16>",
-  "rules_version": "1.1.0",
-  "schema_version": "1.2.0",
+  "dataset_version": "20251231-1.3.0-<hash16>",
+  "rules_version": "1.2.0",
+  "schema_version": "1.3.0",
   "rule_config_hash": "<sha256>",
   "source_snapshot": "<sha256>",
   "universe_hash": "<sha256>",
@@ -149,7 +160,13 @@ python scripts/backtest.py \
       "evidence": { "net_profit": 0, "operating_cash_flow": 0, "cash_conversion_ratio": 1.31 },
       "announcement_dates": ["20250430"],
       "missing_reasons": [],
-      "rule_version": "1.1.0"
+      "peer_context": {
+        "industry_code": "801080",
+        "metrics": {
+          "receivable_gap": { "peer_count": 42, "peer_median": 0.08, "peer_percentile": 0.93 }
+        }
+      },
+      "rule_version": "1.2.0"
     }
   ]
 }
@@ -195,6 +212,7 @@ accounting_red_flags/
   models.py              三态枚举、7 个旗标名、FlagResult
   metrics.py             纯财务指标（缺失即 None，绝不产生 nan/inf）
   rules.py               7 条规则 + 风险分级
+  cross_section.py       行业相对证据（附加，不改变判定）
   service.py             编排：数据 → 时点筛选 → 规则 → 运行元数据
   util.py                代码/日期/季度规范化
   point_in_time/
@@ -213,7 +231,7 @@ accounting_red_flags/
     backtest.py          前瞻收益回测
 config/rules.yaml        所有阈值
 scripts/                 build.py / validate.py / backtest.py
-tests/                   165 个测试
+tests/                   176 个测试
 references/              方法论 / 数据指南 / 来源边界
 production/SKILL.md      生产部署契约
 ```
@@ -227,12 +245,12 @@ python -m pytest -q
 ```
 
 覆盖：阈值边界（严格大于 / 小于）、缺失值处理、时点筛选、同日版本冲突、
-金融业排除、覆盖率 fail-closed、风险分级边界、Parquet upsert、校验器对抗性测试。
+金融业排除、覆盖率 fail-closed、风险分级边界、行业相对证据、Parquet upsert、校验器对抗性测试。
 
 校验器不只比对计数：它用记录自带的 `annual_history` 和 `thresholds` **重新运行规则引擎**，
 逐字段重建 `flags`、`flag_details`、`evidence`、覆盖率与风险等级。因此即使同步篡改
 记录与顶层聚合，只要不能完整复现引擎输出，校验仍然失败。对抗性测试覆盖篡改计数 /
-风险等级 / 旗标 / 证据 / 年报历史 / 诊断 / `dataset_version` / 数据来源一致性。
+风险等级 / 旗标 / 证据 / 年报历史 / 诊断 / `dataset_version` / 数据来源一致性 / `peer_context`。
 
 ---
 

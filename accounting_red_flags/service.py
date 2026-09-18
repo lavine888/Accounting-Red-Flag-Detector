@@ -23,6 +23,7 @@ from .config import (
     config_hash,
     load_rule_config,
 )
+from .cross_section import peer_contexts
 from .models import FLAG_NAMES, RiskLevel, Status
 from .point_in_time.reports import annual_rows, select_visible_revisions
 from .providers.base import DataProvider
@@ -86,6 +87,12 @@ def screen(
         )
         record["rule_version"] = RULES_VERSION
         records.append(record)
+
+    # Peer-relative context is additive: it is attached after the rules have
+    # decided, and it never changes a flag or a risk level.
+    contexts = peer_contexts(records, min_sample=config.peer_min_sample)
+    for record in records:
+        record["peer_context"] = contexts.get(record["symbol"])
 
     records.sort(
         key=lambda record: (

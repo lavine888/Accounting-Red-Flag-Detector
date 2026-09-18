@@ -8,7 +8,7 @@
 
 | 声明 | 证据等级 | 依据 |
 | --- | --- | --- |
-| 规则引擎是确定性的、可复现的 | 已用真实数据验证 | 165 个测试；同一输入产生同一 `dataset_version` |
+| 规则引擎是确定性的、可复现的 | 已用真实数据验证 | 176 个测试；同一输入产生同一 `dataset_version` |
 | 缺失或陈旧的证据不会被当成低风险 | 已用真实数据验证 | 覆盖率低于 60% 或最新年报超过 `max_evidence_age_years` 一律 fail closed 为 `insufficient_data` |
 | 产物被篡改后无法通过校验 | 已用真实数据验证 | 校验器从 `annual_history` 重跑引擎并逐字段比对；诊断、`score`/`rank`/`confidence`、数据来源一致性均在覆盖范围内 |
 | 时点筛选不使用未来信息 | 已用真实数据验证 | `select_visible_revisions` 按 `announcement_date` 过滤；测试覆盖未来报告排除 |
@@ -73,7 +73,8 @@
 
 ## 4. 已知数据限制
 
-1. **仅申万一级行业**：更细的行业中性化未实现。
+1. **仅申万一级行业**：`peer_context` 只在申万一级层面做行业相对分位，更细的行业
+   中性化未实现；且它只提供上下文，不替代绝对阈值。
 2. **应收账款 fallback**：`bs_net_accts_receive` 缺失时用 `bs_notes_accts_receiv`
    （含应收票据），口径略有差异，已在字段表中记录。
 3. **复权标记**：`if_adjusted` 缺失时 fail closed，而不是假设未调整。

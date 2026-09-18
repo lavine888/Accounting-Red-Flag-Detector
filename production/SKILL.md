@@ -116,7 +116,11 @@ PY
 - `dataset_version` → `as_of` + `schema_version` + `rules_version` + `rule_config_hash` + `universe_hash` + `source_snapshot`
 - `source_snapshot` → 本次运行实际使用的所有 PandaData 响应的内容哈希
 - `runtime_versions_json` → `panda_data` / `pandas` / `numpy` / `pyarrow` 版本
-- `evidence_json` → 逐股完整证据（含 `flag_details` 的 value / threshold / reason）
+- `evidence_json` → 逐股完整证据（含 `flag_details` 的 value / threshold / reason，以及 `peer_context`）
+
+> `peer_context` 是**附加的行业相对证据**（申万一级分位），永远不改变任何旗标、
+> `risk_level` 或 `signal`；行业样本不足 `peer_min_sample`（默认 5）时缺省。
+> 校验器会从重算证据独立复算它，篡改即 FAIL。
 
 ---
 

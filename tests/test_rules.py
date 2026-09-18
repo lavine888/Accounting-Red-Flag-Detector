@@ -371,6 +371,21 @@ def test_evidence_never_fills_missing_with_zero():
     assert record["evidence"]["cash_conversion_ratio"] is None
 
 
+def test_revenue_growth_falls_back_when_receivables_are_missing():
+    # RF02 cannot compute (no receivables) but RF03/RF06 can, so the top-level
+    # evidence must still surface revenue growth instead of reading null.
+    rows = series(
+        [2023, 2024],
+        revenue=[1000.0, 1100.0],
+        accounts_receivable=[None, None],
+        inventory=[100.0, 110.0],
+        net_profit=[100.0, 100.0],
+    )
+    record = _evaluate(rows, {"industry_code": "801080"})
+    assert record["evidence"]["revenue_growth"] == pytest.approx(0.10)
+    assert record["evidence"]["receivable_growth"] is None
+
+
 def test_evaluate_symbol_is_order_insensitive():
     rows = _clean_series()
     forward = _evaluate(rows, {"industry_code": "801080", "industry_name": "电子"})

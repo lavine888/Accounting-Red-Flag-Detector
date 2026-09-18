@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 
+import pandas as pd
 import pytest
 
 from accounting_red_flags.config import RULES_VERSION, SCHEMA_VERSION, config_hash, load_rule_config
@@ -134,3 +135,70 @@ def test_diagnostics_cover_every_flag(result):
     assert diagnostics["flag_trigger_counts"]["cash_conversion"] == 2
     assert diagnostics["flag_available_counts"]["receivable_divergence"] == 2
     assert diagnostics["financial_excluded"] == 1
+
+
+# --- peer-relative context (additive cross-sectional evidence) ---------------
+
+_PEER_SYMBOLS = [f"60010{i}.SH" for i in range(6)]
+
+
+class _PeerProvider(FixtureProvider):
+    """Six electronics names whose receivables gap spans the industry."""
+
+    def fetch_reports(self, symbols, as_of, years=8):
+        rows = []
+        for index, symbol in enumerate(_PEER_SYMBOLS):
+            receivable = 100.0
+            for year in (2022, 2023, 2024):
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "quarter": f"{year}q4",
+                        "date": f"{year + 1}0430",
+                        "if_adjusted": 0,
+                        "is_revenue": 1000.0,
+                        "is_oper_cost": 600.0,
+                        "is_n_income_attr_p": 100.0,
+                        "cfs_net_cash_operating": 120.0,
+                        "bs_net_accts_receive": receivable,
+                        "bs_inventory": 100.0,
+                        "bs_total_assets": 1000.0,
+                    }
+                )
+                receivable *= 1.05 + 0.10 * index
+        frame = pd.DataFrame(rows)
+        return frame[frame["symbol"].isin(symbols)].reset_index(drop=True)
+
+    def fetch_industries(self, symbols, as_of):
+        return {
+            symbol: {"industry_code": "801080", "industry_name": "电子"}
+            for symbol in symbols
+            if symbol in _PEER_SYMBOLS
+        }
+
+
+def test_peer_context_is_reported_and_validated():
+    result = screen(as_of="20251231", symbols=_PEER_SYMBOLS, provider=_PeerProvider())
+    assert validate_result(result)["status"] == "PASS"
+    by_symbol = {record["symbol"]: record for record in result["records"]}
+    gap = by_symbol["600105.SH"]["peer_context"]["metrics"]["receivable_gap"]
+    assert by_symbol["600105.SH"]["peer_context"]["industry_code"] == "801080"
+    assert gap["peer_count"] == 6
+    assert gap["peer_median"] == pytest.approx(0.30)
+    assert gap["peer_percentile"] == pytest.approx(5 / 6)
+
+
+def test_peer_context_never_changes_a_flag():
+    result = screen(as_of="20251231", symbols=_PEER_SYMBOLS, provider=_PeerProvider())
+    by_symbol = {record["symbol"]: record for record in result["records"]}
+    # Highest peer percentile still triggers the absolute rule; lowest still clears.
+    assert by_symbol["600105.SH"]["flag_details"]["receivable_divergence"]["state"] is True
+    assert by_symbol["600100.SH"]["flag_details"]["receivable_divergence"]["state"] is False
+
+
+def test_peer_context_is_empty_when_industry_sample_is_small(result):
+    for record in result["records"]:
+        if record["status"] == "not_applicable":
+            assert record["peer_context"] is None
+        else:
+            assert record["peer_context"]["metrics"] == {}

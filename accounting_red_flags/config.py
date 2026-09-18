@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-RULES_VERSION = "1.1.0"
-SCHEMA_VERSION = "1.2.0"
+RULES_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.3.0"
 SKILL_ID = "ARFD-LAVINE"
 SKILL_NAME = "Accounting Red Flag Detector - Lavine Version"
 DEFAULT_RULES_PATH = Path(__file__).resolve().parents[1] / "config" / "rules.yaml"
@@ -33,6 +33,8 @@ class RuleConfig:
     gross_margin_min_history: int = 3
     gross_margin_max_history: int = 5
     deterioration_years: int = 3
+    # Minimum same-industry sample before peer-relative context is reported.
+    peer_min_sample: int = 5
 
     # RF01
     cash_conversion_min: float = 0.80

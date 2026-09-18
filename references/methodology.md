@@ -168,11 +168,40 @@ else:                        low
 
 ---
 
+## 8.5 行业相对证据（peer context）
+
+RF02/RF03/RF04/RF06 都是与公司**自身上年**比较，因此地产、建筑、To-G 等行业的应收
+账款、存货、应计天然偏高，容易被绝对阈值误伤。每条记录附带 `peer_context`：
+
+```jsonc
+"peer_context": {
+  "industry_code": "801080",
+  "metrics": {
+    "receivable_gap": { "peer_count": 42, "peer_median": 0.08, "peer_percentile": 0.93 },
+    "inventory_gap":  { "peer_count": 42, "peer_median": 0.05, "peer_percentile": 0.71 }
+  }
+}
+```
+
+- 参与比较的指标：`receivable_gap`、`inventory_gap`、`accrual_ratio`、`growth_gap`。
+- `peer_percentile` = 同行业中**严格小于**本公司取值的样本占比（0.0 = 行业最低）。
+- 样本池：所有非金融、且该指标有限的公司；金融业 `not_applicable` 不入池。
+- 行业样本 < `peer_min_sample`（默认 5）时该指标**直接缺省**，绝不猜测。
+- **不改变判定**：`peer_context` 只影响调查者的解读，不改变任何旗标、`risk_level`
+  或 `signal`。系统性造假往往整条产业链同时异常，用同行“洗白”会掩盖本应暴露的案例。
+- 校验器从**重算证据**独立复算 `peer_context`，篡改即 FAIL。
+
+---
+
 ## 9. 已知局限
 
 1. **仅年报**：季报、TTM、中报未纳入 V1。
 2. **仅报表数字**：不含附注、审计意见、关联交易、股权质押、商誉明细。
-3. **行业中性化缺失**：RF02/RF03 未做行业基准，地产、建筑等应收账款天然高的行业可能被误伤。
+3. **行业中性化仅提供上下文**：RF02/RF03/RF04/RF06 未用行业基准替代绝对阈值，但每条
+   记录附带 `peer_context`（申万一级分位），供调查者判断是否属于行业结构性特征。
+   这是**附加证据，不改变任何旗标或风险等级**：系统性造假往往整条产业链同时异常，
+   用同行“洗白”会掩盖工具本该暴露的案例。行业样本不足 `peer_min_sample`（默认 5）时
+   指标直接缺省，绝不猜测。
 4. **RF05 依赖自身历史**：上市不足 4 年的公司通常 `null`，进而降低覆盖率。
 5. **不做退市/停牌处理**：回测收益只做复权价计算，未考虑涨跌停与流动性。
 6. **回测样本量**：小样本分组统计不具备统计显著性，只能用于管线验证。
@@ -181,8 +210,10 @@ else:                        low
 
 ## 10. 版本
 
-- `RULES_VERSION = 1.1.0`：七条规则 + 覆盖率 fail-closed + 证据新鲜度 fail-closed。
-- `SCHEMA_VERSION = 1.2.0`：JSON 与 Parquet 字段契约；`dataset_version` 同时绑定
-  `rules_version`，规则逻辑版本变化即使阈值不变也会产生新的数据集版本。
+- `RULES_VERSION = 1.2.0`：七条规则 + 覆盖率 fail-closed + 证据新鲜度 fail-closed +
+  顶层 `revenue_growth` 跨规则回退（证据完整性，不改变判定）。
+- `SCHEMA_VERSION = 1.3.0`：JSON 与 Parquet 字段契约；每条记录新增 `peer_context`
+  （行业相对证据）。`dataset_version` 同时绑定 `rules_version`，规则逻辑版本变化
+  即使阈值不变也会产生新的数据集版本。
 
 阈值变更 → `rule_config_hash` 变更 → 旧产物校验失败，需要显式迁移。

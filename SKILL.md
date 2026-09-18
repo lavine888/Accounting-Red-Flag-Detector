@@ -1,6 +1,6 @@
 ---
 name: accounting-red-flag-detector-lavine-version
-description: "PandaData-only, point-in-time A-share accounting red-flag detector covering seven forensic rules (cash conversion, receivables/inventory divergence, accruals, gross-margin anomaly, profit-revenue divergence, multi-year cash-conversion deterioration) with three-state flags, fail-closed coverage and evidence freshness, financial-industry exclusion and auditable JSON/Parquet evidence. Use when an agent needs an accounting-quality screen, historical signal reconstruction or forward-return research without future information."
+description: "PandaData-only, point-in-time A-share accounting red-flag detector covering seven forensic rules (cash conversion, receivables/inventory divergence, accruals, gross-margin anomaly, profit-revenue divergence, multi-year cash-conversion deterioration) with three-state flags, fail-closed coverage and evidence freshness, financial-industry exclusion, additive industry-relative (peer) context that never changes a verdict, and auditable JSON/Parquet evidence. Use when an agent needs an accounting-quality screen, historical signal reconstruction or forward-return research without future information."
 quantSkills:
   organization: https://github.com/lavine888
   repository: lavine888/Accounting-Red-Flag-Detector
@@ -67,7 +67,8 @@ Use this skill to run a point-in-time accounting-quality screen over China A-sha
 5. Resolve Shenwan L1 industry membership valid on the decision date. Financial industries (banking `801780`, non-bank financials `801790`, or matching names) return `not_applicable`.
 6. Evaluate the seven red flags. Each is `true`, `false`, or `null` (missing evidence). Nothing is imputed.
 7. Classify risk: 0–1 flags `low`, 2–3 `medium`, ≥ 4 `high`; coverage below 60% or evidence older than `max_evidence_age_years` (default 2 years) is `insufficient_data` (fail closed).
-8. Emit JSON and/or the versioned production Parquet factor table with full evidence and provenance.
+8. Attach additive industry-relative context: for RF02/RF03/RF04/RF06 metrics, report the company's Shenwan L1 peer percentile when the industry pool has at least `peer_min_sample` (default 5) observations. This never changes a flag or a risk level.
+9. Emit JSON and/or the versioned production Parquet factor table with full evidence and provenance.
 
 ## Hard Rules
 
@@ -90,6 +91,7 @@ All thresholds live in `config/rules.yaml`; the engine never hard-codes a number
 - **No zero-fill**: a missing field never becomes `0`; growth rates over a non-positive base return `null`.
 - **Fail-closed**: missing industry, conflicting revisions, missing adjustment flag, fewer than two annual reports, coverage below 60%, or a latest annual report older than `max_evidence_age_years` all produce `insufficient_data`.
 - **Financials out of scope**: banks, insurers and brokers are `not_applicable`, never forced through industrial rules.
+- **Industry context is additive**: `peer_context` reports where a company sits within its Shenwan L1 industry, but never suppresses or downgrades a flag. Systemic fraud can make a whole sector look alike, so peer normalisation must not explain an anomaly away. Below `peer_min_sample` the metric is absent, never guessed.
 - **Auditable**: every record carries `flag_details` (value, threshold, reason), `evidence`, `announcement_dates`, `report_versions` and `missing_reasons`.
 
 ## Commands
@@ -112,7 +114,7 @@ Credentials are read only from `PANDA_DATA_USERNAME` / `PANDA_DATA_PASSWORD` (an
 - **JSON**: run metadata (`dataset_version`, `rule_config_hash`, `source_snapshot`, `universe_hash`, `counts`, `diagnostics`) plus one record per company.
 - **Parquet**: keyed by `(trade_date, factor_id, symbol)`, upserted, with `factor_value`, `score`, `rank`, `signal`, `confidence`, `risk_level`, `status`, `evidence_json`, `run_metadata_json` and version/provenance columns.
 
-The validator re-derives every aggregate and every risk level, then re-runs the rule engine over each record's own `annual_history` to rebuild `flags`, `flag_details`, `evidence` and coverage. Tampered, truncated or internally inconsistent artifacts fail.
+The validator re-derives every aggregate and every risk level, then re-runs the rule engine over each record's own `annual_history` to rebuild `flags`, `flag_details`, `evidence` and coverage, and independently recomputes `peer_context`. Tampered, truncated or internally inconsistent artifacts fail.
 
 ## Fail-Closed Contract
 

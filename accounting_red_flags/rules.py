@@ -10,7 +10,7 @@ so no conclusion is allowed).
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .config import RuleConfig
 from .metrics import (
@@ -443,6 +443,24 @@ def evaluate_symbol(
     )
 
 
+def _first_present(
+    details: Mapping[str, Mapping[str, Any]], names: Sequence[str], key: str
+) -> Any:
+    """First non-null value for ``key`` across several rule evidences.
+
+    The divergence rules all derive revenue growth from the same two periods,
+    so whichever rule had complete evidence first supplies it. This keeps the
+    top-level ``revenue_growth`` from reading null just because receivables
+    were missing while inventory and profit were present.
+    """
+
+    for name in names:
+        value = details[name]["evidence"].get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def _record(
     *,
     symbol: str,
@@ -487,7 +505,11 @@ def _record(
         "cash_conversion_ratio": details["cash_conversion"]["evidence"].get("cash_conversion_ratio"),
         "cash_flow_negative": details["cash_conversion"]["evidence"].get("cash_flow_negative"),
         "receivable_growth": details["receivable_divergence"]["evidence"].get("accounts_receivable_growth"),
-        "revenue_growth": details["receivable_divergence"]["evidence"].get("revenue_growth"),
+        "revenue_growth": _first_present(
+            details,
+            ("receivable_divergence", "inventory_divergence", "profit_revenue_divergence"),
+            "revenue_growth",
+        ),
         "receivable_gap": details["receivable_divergence"]["evidence"].get("gap"),
         "inventory_growth": details["inventory_divergence"]["evidence"].get("inventory_growth"),
         "inventory_gap": details["inventory_divergence"]["evidence"].get("gap"),

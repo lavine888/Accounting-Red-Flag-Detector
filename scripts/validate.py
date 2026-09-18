@@ -24,6 +24,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from accounting_red_flags.config import RULES_VERSION, SCHEMA_VERSION, RuleConfig
+from accounting_red_flags.cross_section import peer_contexts
 from accounting_red_flags.materialization.parquet_writer import PRODUCTION_KEY, signal_for
 from accounting_red_flags.models import FLAG_NAMES, RiskLevel, Status
 from accounting_red_flags.rules import evaluate_symbol
@@ -250,6 +251,7 @@ def validate_result(result: dict) -> dict:
     if not str(result.get("source_snapshot", "")):
         errors.append("source_snapshot must be non-empty")
 
+    derived_records: list[dict] = []
     for record in records:
         symbol = record.get("symbol")
         status = record.get("status")
@@ -313,9 +315,20 @@ def validate_result(result: dict) -> dict:
             except Exception as exc:  # noqa: BLE001 - reported, not raised
                 errors.append(f"{symbol}: recomputation failed: {type(exc).__name__}: {exc}")
             else:
+                derived_records.append(derived)
                 for key in RECORD_COMPARE_KEYS:
                     if derived.get(key) != record.get(key):
                         errors.append(f"{symbol}: {key} does not match recomputed evidence")
+    if recompute_config is not None and len(derived_records) == len(records):
+        # Peer context is derived from the *recomputed* evidence, so a tampered
+        # peer block fails even if the top-level aggregates were edited to match.
+        expected_contexts = peer_contexts(
+            derived_records, min_sample=recompute_config.peer_min_sample
+        )
+        for record in records:
+            symbol = record.get("symbol")
+            if record.get("peer_context") != expected_contexts.get(symbol):
+                errors.append(f"{symbol}: peer_context does not match recomputed peer statistics")
     return {"status": "PASS" if not errors else "FAIL", "errors": errors, "record_count": len(records)}
 
 
