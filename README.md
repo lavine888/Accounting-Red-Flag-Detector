@@ -117,6 +117,17 @@ python scripts/validate.py production/database.parquet
 
 校验器会**重新推导**每一个聚合值和风险等级；任何手改、截断或版本不符都会失败。
 
+### 生成可读报告
+
+```bash
+# 先校验后渲染；未通过校验的产物直接拒绝（fail closed）
+python scripts/report.py output/red-flags.json --min-risk medium --output output/report.md
+```
+
+输出 Markdown：概览、待核查清单（每条命中规则给出 value/阈值、关键证据、行业相对分位）、
+证据不足清单与可追溯性。缺失值一律渲染为 `—`，绝不渲染成 `0`。`--min-risk high` 只看高风险，
+`--limit N` 限制条数。
+
 ### 研究回测
 
 ```bash
@@ -225,13 +236,14 @@ accounting_red_flags/
   materialization/
     json_writer.py       规范 JSON
     parquet_writer.py    生产 Parquet upsert
+  reporting.py           JSON → Markdown 可读报告（只读视图）
   research/
     forward_returns.py   3/6/12 个月持有期
     diagnostics.py       分组统计与组合回撤
     backtest.py          前瞻收益回测
 config/rules.yaml        所有阈值
-scripts/                 build.py / validate.py / backtest.py
-tests/                   176 个测试
+scripts/                 build.py / validate.py / report.py / backtest.py
+tests/                   189 个测试
 references/              方法论 / 数据指南 / 来源边界
 production/SKILL.md      生产部署契约
 ```
@@ -245,7 +257,8 @@ python -m pytest -q
 ```
 
 覆盖：阈值边界（严格大于 / 小于）、缺失值处理、时点筛选、同日版本冲突、
-金融业排除、覆盖率 fail-closed、风险分级边界、行业相对证据、Parquet upsert、校验器对抗性测试。
+金融业排除、覆盖率 fail-closed、风险分级边界、行业相对证据、Parquet upsert、校验器对抗性测试、
+Markdown 报告渲染。
 
 校验器不只比对计数：它用记录自带的 `annual_history` 和 `thresholds` **重新运行规则引擎**，
 逐字段重建 `flags`、`flag_details`、`evidence`、覆盖率与风险等级。因此即使同步篡改

@@ -3,6 +3,14 @@
 > 原则不变：**Agent investigates. Rules decide. Evidence explains.**
 > 缺失数据永不猜成 0；证据不足永不降级成"低风险"。
 
+## 已完成 1.4.0：可读报告渲染
+
+- 新增 `scripts/report.py` + `accounting_red_flags/reporting.py`：把**已校验**的 JSON
+  渲染为确定性 Markdown（概览、待核查清单、证据不足清单、可追溯性）。
+- 只读视图：缺失值渲染为 `—` 而非 `0`；`insufficient_data` 单独成段且标注“不代表安全”。
+- fail closed：渲染前先跑严格校验器，未通过则拒绝渲染并返回非零退出码。
+- `--min-risk` / `--limit` / `--output`；合成数据结果在顶部显式标注。
+
 ## 已完成 1.3.0：行业相对证据（peer context）
 
 - 每条记录新增 `peer_context`：RF02/RF03/RF04/RF06 指标在申万一级同行业中的
@@ -48,6 +56,8 @@
 - **缓存生命周期管理**：缺少按 `as_of` / 账号的清理、压缩与命中率报告。
 - **供应商边界文档**：把 PandaData 字段探测结果（约 322 列、q4 累计口径）固化为
   可重复运行的 `scripts/probe_fields.py`，而不是文档中的一次性记录。
+- **运行报告持久化**：`scripts/report.py` 目前只做渲染；尚未把报告作为运行产物
+  与 `run_id` 一起归档。
 
 ## P1：研究验证
 
@@ -61,5 +71,3 @@
 
 - **机器可读的冻结验证产物**：发布带 SHA-256 manifest 的公开验证快照。
 - **可安装入口**：提供 `pyproject.toml` 与 console entrypoint，而不只是脚本。
-- **Agent 报告渲染**：从 JSON 生成人类可读的逐股红旗解释（Markdown / HTML），
-  当前只有结构化证据。

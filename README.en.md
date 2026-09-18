@@ -77,12 +77,17 @@ python scripts/build.py --as-of 20251231 --all-a --provider fixture
 python scripts/validate.py output/red-flags.json
 python scripts/validate.py production/database.parquet
 
+# render a validated result as Markdown (refuses unvalidated input)
+python scripts/report.py output/red-flags.json --min-risk medium --output output/report.md
+
 # research backtest
 python scripts/backtest.py --signal-dates 20221230 20231229 20241231 \
     --all-sh-sz --output output/backtest.json
 ```
 
 The validator **re-derives** every aggregate and every risk level. Hand-edited, truncated or version-mismatched artifacts fail.
+
+`scripts/report.py` turns a **validated** result into a deterministic Markdown report: summary, triage list (each triggered rule with its value vs threshold, key evidence, peer percentile), an `insufficient_data` list, and provenance. Missing values render as `—`, never `0`; an unvalidated artifact is refused.
 
 `--provider fixture` uses synthetic demo data: results carry `requires_live_validation=true` and cannot be written to the canonical `production/database.parquet`.
 
@@ -121,10 +126,11 @@ accounting_red_flags/
   point_in_time/{reports,universe}.py
   providers/{base,pandadata,fixture}.py
   materialization/{json_writer,parquet_writer}.py
+  reporting.py
   research/{forward_returns,diagnostics,backtest}.py
 config/rules.yaml
-scripts/{build,validate,backtest}.py
-tests/               176 tests
+scripts/{build,validate,report,backtest}.py
+tests/               189 tests
 references/          methodology / data guide / source boundary
 production/SKILL.md  production deployment contract
 ```
@@ -137,7 +143,7 @@ production/SKILL.md  production deployment contract
 python -m pytest -q
 ```
 
-Covers threshold boundaries, missing-value handling, point-in-time selection, same-day revision conflicts, financial exclusion, coverage fail-closed, risk-classification boundaries, industry-relative evidence, Parquet upsert, and adversarial validator tests.
+Covers threshold boundaries, missing-value handling, point-in-time selection, same-day revision conflicts, financial exclusion, coverage fail-closed, risk-classification boundaries, industry-relative evidence, Parquet upsert, adversarial validator tests, and Markdown report rendering.
 
 The validator does not merely compare aggregates: it **re-runs the rule engine** over each record's own `annual_history` and `thresholds` and compares all derived fields (`flags`, `flag_details`, `evidence`, coverage, risk level, …). Tampering with counts, risk levels, flags, evidence, annual history, diagnostics, `dataset_version`, `peer_context`, row-level `score`/`rank`/`confidence` or source consistency fails validation.
 

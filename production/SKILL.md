@@ -45,6 +45,10 @@ python scripts/build.py --as-of <AS_OF> --all-sh-sz \
 python scripts/validate.py output/red-flags-<AS_OF>.json
 python scripts/validate.py production/database.parquet
 
+# 2b. 可选：渲染人工复核报告（未过校验会被拒绝）
+python scripts/report.py output/red-flags-<AS_OF>.json --min-risk medium \
+    --output output/report-<AS_OF>.md
+
 # 3. 检查关键指标
 python - <<'PY'
 import json

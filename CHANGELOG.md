@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.4.0 - 2026-09-19
+
+**主题：可读报告渲染（report renderer）。** 让产物自己解释自己，且不新增任何
+不可校验的推断。
+
+### 新增：`scripts/report.py` + `accounting_red_flags/reporting.py`
+
+- 将**已校验**的 JSON 结果渲染为确定性 Markdown：概览（风险/状态计数、平均覆盖率、
+  规则命中、缺失/排除原因）、待核查清单（按风险与代码排序；每条命中规则给出
+  `value` vs 阈值、关键证据、行业相对分位）、证据不足清单、可追溯性（数据集版本 /
+  rules / schema / 哈希 / run_id）。
+- **只读视图**：不新增、不丢弃、不重写任何证据。缺失值一律渲染为 `—`，绝不渲染成 `0`；
+  `insufficient_data` 单独成段，并显式标注“不代表安全”。
+- **fail closed**：`scripts/report.py` 先调用严格校验器，未通过则拒绝渲染并返回非零退出码。
+- `--min-risk {high,medium,low}`（默认 `medium` = 高+中）、`--limit N`、`--output FILE`。
+- 合成数据结果会在报告顶部显式标注 `requires_live_validation=true`。
+
+### 版本
+
+- `__version__` / `skill.json.version` `1.3.0` → `1.4.0`。
+- `RULES_VERSION` `1.2.0`、`SCHEMA_VERSION` `1.3.0` **不变**：本次不改变引擎输出，
+  也不改变 JSON/Parquet 字段契约，因此 `dataset_version` 不变。
+
+### 测试
+
+- 新增 13 个测试（`tests/test_reporting.py`）：概览/清单/可追溯性、合成数据标注、
+  `min_risk` 过滤、`limit` 截断、证据不足清单、金融业不入清单、缺失值不渲染为 `0`、
+  RF05 绝对值展示、`peer_context` 展示、非法 `min_risk` 报错、确定性、CLI 成功写入、
+  CLI 拒绝未校验产物。测试 176 → 189。
+
 ## 1.3.0 - 2026-09-19
 
 **主题：行业相对证据（peer context）。** 回应“行业中性化缺失”的已知局限，但以

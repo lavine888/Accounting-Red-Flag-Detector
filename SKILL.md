@@ -69,6 +69,7 @@ Use this skill to run a point-in-time accounting-quality screen over China A-sha
 7. Classify risk: 0–1 flags `low`, 2–3 `medium`, ≥ 4 `high`; coverage below 60% or evidence older than `max_evidence_age_years` (default 2 years) is `insufficient_data` (fail closed).
 8. Attach additive industry-relative context: for RF02/RF03/RF04/RF06 metrics, report the company's Shenwan L1 peer percentile when the industry pool has at least `peer_min_sample` (default 5) observations. This never changes a flag or a risk level.
 9. Emit JSON and/or the versioned production Parquet factor table with full evidence and provenance.
+10. Optionally render a validated result as Markdown (`scripts/report.py`); it validates first and refuses an unvalidated artifact.
 
 ## Hard Rules
 
@@ -103,6 +104,7 @@ python scripts/build.py --as-of 20251231 --all-sh-sz \
     --json-output output/red-flags.json \
     --parquet-output production/database.parquet
 python scripts/validate.py output/red-flags.json
+python scripts/report.py output/red-flags.json --min-risk medium --output output/report.md
 python scripts/backtest.py --signal-dates 20221230 20231229 20241231 \
     --all-sh-sz --output output/backtest.json
 ```
