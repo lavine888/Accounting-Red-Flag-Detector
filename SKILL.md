@@ -112,7 +112,7 @@ Credentials are read only from `PANDA_DATA_USERNAME` / `PANDA_DATA_PASSWORD` (an
 - **JSON**: run metadata (`dataset_version`, `rule_config_hash`, `source_snapshot`, `universe_hash`, `counts`, `diagnostics`) plus one record per company.
 - **Parquet**: keyed by `(trade_date, factor_id, symbol)`, upserted, with `factor_value`, `score`, `rank`, `signal`, `confidence`, `risk_level`, `status`, `evidence_json`, `run_metadata_json` and version/provenance columns.
 
-The validator re-derives every aggregate and every risk level; tampered or truncated artifacts fail.
+The validator re-derives every aggregate and every risk level, then re-runs the rule engine over each record's own `annual_history` to rebuild `flags`, `flag_details`, `evidence` and coverage. Tampered, truncated or internally inconsistent artifacts fail.
 
 ## Fail-Closed Contract
 

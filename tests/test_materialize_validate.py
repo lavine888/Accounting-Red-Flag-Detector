@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import pytest
 
+from accounting_red_flags.config import SCHEMA_VERSION
 from accounting_red_flags.materialization import production_frame, signal_for, write_production
 from accounting_red_flags.materialization.parquet_writer import PRODUCTION_KEY
 from accounting_red_flags.providers import FixtureProvider
@@ -26,7 +27,7 @@ def test_production_frame_shape_and_key(result):
     assert not frame.duplicated(PRODUCTION_KEY).any()
     assert set(["trade_date", "symbol", "factor_id", "signal", "evidence_json"]).issubset(frame.columns)
     assert frame["trade_date"].eq("20251231").all()
-    assert frame["schema_version"].eq("1.0.0").all()
+    assert frame["schema_version"].eq(SCHEMA_VERSION).all()
 
 
 def test_signal_mapping(result):
@@ -167,3 +168,68 @@ def test_validate_production_catches_missing_columns(result):
     report = validate_production(frame)
     assert report["status"] == "FAIL"
     assert any("missing production columns" in error for error in report["errors"])
+
+
+# --- v1.1.0 integrity regressions ------------------------------------------
+
+
+def test_validator_catches_tampered_diagnostics(result):
+    for key, value in (
+        ("risk_level_counts", {"low": 999}),
+        ("industry_coverage", 999),
+        ("evaluated_coverage_mean", 999.0),
+    ):
+        tampered = copy.deepcopy(result)
+        tampered["diagnostics"][key] = value
+        report = validate_result(tampered)
+        assert report["status"] == "FAIL", key
+        assert any("diagnostic" in error for error in report["errors"]), key
+
+
+def test_validator_catches_tampered_flag_details(result):
+    tampered = copy.deepcopy(result)
+    record = next(item for item in tampered["records"] if item["symbol"] == "600002.SH")
+    record["flag_details"]["cash_conversion"]["value"] = 0.99
+    report = validate_result(tampered)
+    assert report["status"] == "FAIL"
+    assert any("flag_details" in error for error in report["errors"])
+
+
+def test_validator_catches_tampered_annual_history(result):
+    tampered = copy.deepcopy(result)
+    record = next(item for item in tampered["records"] if item["symbol"] == "600002.SH")
+    record["annual_history"][-1]["revenue"] = 1.0
+    report = validate_result(tampered)
+    assert report["status"] == "FAIL"
+
+
+def test_validator_catches_inconsistent_live_source(result):
+    tampered = copy.deepcopy(result)
+    tampered["data_source"] = "PandaData"
+    report = validate_result(tampered)
+    assert report["status"] == "FAIL"
+    assert any("requires_live_validation" in error for error in report["errors"])
+
+
+def test_validate_production_recomputes_row_metrics(result):
+    for column, value in (
+        ("score", 0.0),
+        ("rank", 99),
+        ("confidence", 0.0),
+        ("factor_value", 0),
+    ):
+        frame = production_frame(result)
+        frame[column] = value
+        report = validate_production(frame)
+        assert report["status"] == "FAIL", column
+
+
+def test_validate_production_rejects_rewritten_evidence(tmp_path, result):
+    frame = production_frame(result)
+    row_index = frame.index[frame["symbol"] == "600002.SH"][0]
+    evidence = json.loads(frame.loc[row_index, "evidence_json"])
+    evidence["red_flag_count"] = 0
+    frame.loc[row_index, "red_flag_count"] = 0
+    frame.loc[row_index, "evidence_json"] = json.dumps(evidence)
+    report = validate_production(frame)
+    assert report["status"] == "FAIL"

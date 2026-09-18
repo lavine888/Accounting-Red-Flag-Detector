@@ -179,6 +179,7 @@ else:                        low
 ## 10. 版本
 
 - `RULES_VERSION = 1.0.0`：七条规则 + 覆盖率 fail-closed。
-- `SCHEMA_VERSION = 1.0.0`：JSON 与 Parquet 字段契约。
+- `SCHEMA_VERSION = 1.1.0`：JSON 与 Parquet 字段契约；`dataset_version` 同时绑定
+  `rules_version`，规则逻辑版本变化即使阈值不变也会产生新的数据集版本。
 
 阈值变更 → `rule_config_hash` 变更 → 旧产物校验失败，需要显式迁移。

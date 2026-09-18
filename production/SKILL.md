@@ -113,7 +113,7 @@ PY
 任一生产行都可以反查到：
 
 - `run_id` → 一次具体运行
-- `dataset_version` → `as_of` + `schema_version` + `rule_config_hash` + `universe_hash` + `source_snapshot`
+- `dataset_version` → `as_of` + `schema_version` + `rules_version` + `rule_config_hash` + `universe_hash` + `source_snapshot`
 - `source_snapshot` → 本次运行实际使用的所有 PandaData 响应的内容哈希
 - `runtime_versions_json` → `panda_data` / `pandas` / `numpy` / `pyarrow` 版本
 - `evidence_json` → 逐股完整证据（含 `flag_details` 的 value / threshold / reason）

@@ -27,7 +27,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from accounting_red_flags.config import load_rule_config
-from accounting_red_flags.materialization import production_frame, write_production
+from accounting_red_flags.materialization import production_frame, write_json, write_production
 from accounting_red_flags.providers import FixtureProvider, PandaDataProvider
 from accounting_red_flags.service import screen
 
@@ -133,13 +133,10 @@ def main() -> int:
             }
         )
     result = run(input_data, run_config, provider=provider)
-    text = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False, default=str)
     if args.json_output:
-        output = Path(args.json_output)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(text + "\n", encoding="utf-8")
+        write_json(result, args.json_output)
     else:
-        print(text)
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False, default=str))
     return 0
 
 

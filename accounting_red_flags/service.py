@@ -11,7 +11,6 @@ from collections import Counter
 from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
-import json
 import re
 from typing import Any
 from uuid import uuid4
@@ -103,7 +102,7 @@ def screen(
     universe_hash = hashlib.sha256("\n".join(sorted(universe)).encode("utf-8")).hexdigest()
     source = provider.source_provenance()
     dataset_hash = hashlib.sha256(
-        f"{as_of}:{SCHEMA_VERSION}:{config_digest}:{universe_hash}:{source['response_manifest_hash']}".encode("utf-8")
+        f"{as_of}:{SCHEMA_VERSION}:{RULES_VERSION}:{config_digest}:{universe_hash}:{source['response_manifest_hash']}".encode("utf-8")
     ).hexdigest()
 
     risk_counts = Counter(record["risk_level"] for record in records)
@@ -174,7 +173,3 @@ def screen(
         ],
         "records": records,
     }
-
-
-def _serialize_thresholds(config: RuleConfig) -> str:
-    return json.dumps(asdict(config), sort_keys=True, separators=(",", ":"))

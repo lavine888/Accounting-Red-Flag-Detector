@@ -8,7 +8,7 @@
 # refuses results whose embedded versions differ from the running code.
 
 rules_version: "1.0.0"
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 
 # --- History window -------------------------------------------------------
 # Annual (q4) reports are the evidence base. We request history_years of

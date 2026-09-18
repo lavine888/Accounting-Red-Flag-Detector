@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from accounting_red_flags.config import SCHEMA_VERSION, config_hash, load_rule_config
+from accounting_red_flags.config import RULES_VERSION, SCHEMA_VERSION, config_hash, load_rule_config
 from accounting_red_flags.providers import FixtureProvider
 from accounting_red_flags.service import screen, validate_as_of, validate_symbols
 from scripts.validate import validate_result
@@ -55,7 +55,7 @@ def test_metadata_is_internally_consistent(result):
         "\n".join(sorted(SYMBOLS)).encode("utf-8")
     ).hexdigest()
     assert result["universe_hash"] == expected_universe
-    assert result["dataset_version"].startswith("20251231-1.0.0-")
+    assert result["dataset_version"].startswith(f"20251231-{SCHEMA_VERSION}-")
 
 
 def test_fixture_data_is_flagged_as_requiring_live_validation(result):
@@ -70,6 +70,17 @@ def test_runs_are_reproducible_except_for_run_id(result):
     assert [record["symbol"] for record in result["records"]] == [
         record["symbol"] for record in again["records"]
     ]
+
+
+def test_dataset_version_binds_rules_version(monkeypatch):
+    from accounting_red_flags import service as service_module
+
+    first = screen(as_of="20251231", symbols=SYMBOLS, provider=FixtureProvider())
+    monkeypatch.setattr(service_module, "RULES_VERSION", "9.9.9")
+    second = screen(as_of="20251231", symbols=SYMBOLS, provider=FixtureProvider())
+    assert second["rules_version"] == "9.9.9"
+    assert second["dataset_version"] != first["dataset_version"]
+    assert second["dataset_version"].startswith(f"20251231-{SCHEMA_VERSION}-")
 
 
 def test_all_a_uses_provider_universe():

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 RULES_VERSION = "1.0.0"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 SKILL_ID = "ARFD-LAVINE"
 SKILL_NAME = "Accounting Red Flag Detector - Lavine Version"
 DEFAULT_RULES_PATH = Path(__file__).resolve().parents[1] / "config" / "rules.yaml"
@@ -107,9 +107,19 @@ def load_rule_config(path: str | Path | None = None) -> RuleConfig:
     raw = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"rule config {source} must be a mapping")
-    # version keys are validated against the running code, not passed through
-    raw.pop("rules_version", None)
-    raw.pop("schema_version", None)
+    # Version keys are validated against the running code, never passed through
+    # to ``RuleConfig``. A mismatch is a hard error: silently ignoring it would
+    # let an artifact claim a rule/schema version the engine did not run.
+    declared_rules = raw.pop("rules_version", None)
+    declared_schema = raw.pop("schema_version", None)
+    if declared_rules is not None and str(declared_rules) != RULES_VERSION:
+        raise ValueError(
+            f"rules_version {declared_rules!r} in {source} does not match runtime {RULES_VERSION}"
+        )
+    if declared_schema is not None and str(declared_schema) != SCHEMA_VERSION:
+        raise ValueError(
+            f"schema_version {declared_schema!r} in {source} does not match runtime {SCHEMA_VERSION}"
+        )
     allowed = {field.name for field in fields(RuleConfig)}
     unknown = sorted(set(raw) - allowed)
     if unknown:

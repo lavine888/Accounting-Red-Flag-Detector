@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from dataclasses import fields
 from datetime import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -21,9 +23,10 @@ import pandas as pd
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from accounting_red_flags.config import RULES_VERSION, SCHEMA_VERSION
+from accounting_red_flags.config import RULES_VERSION, SCHEMA_VERSION, RuleConfig
 from accounting_red_flags.materialization.parquet_writer import PRODUCTION_KEY, signal_for
 from accounting_red_flags.models import FLAG_NAMES, RiskLevel, Status
+from accounting_red_flags.rules import evaluate_symbol
 
 RISK_LEVELS = {
     RiskLevel.LOW.value,
@@ -79,6 +82,55 @@ def _classify(red_flag_count: int, coverage: float, thresholds: dict) -> str:
     return RiskLevel.LOW.value
 
 
+# Every field the engine derives for one company. The validator re-runs the
+# engine over the record's own ``annual_history`` and compares all of them, so
+# tampering with a flag, a detail, coverage or a risk level cannot survive even
+# if the top-level aggregates are edited to match.
+RECORD_COMPARE_KEYS = (
+    "symbol",
+    "as_of",
+    "status",
+    "risk_level",
+    "is_financial",
+    "industry",
+    "red_flag_count",
+    "available_rule_count",
+    "total_rule_count",
+    "coverage_ratio",
+    "flags",
+    "flag_details",
+    "evidence",
+    "latest_fiscal_year",
+    "previous_fiscal_year",
+    "annual_history",
+    "announcement_dates",
+    "report_periods",
+    "report_versions",
+    "conflicting_quarters",
+    "missing_reasons",
+)
+
+
+def _rule_config(thresholds: dict) -> RuleConfig:
+    allowed = {field.name for field in fields(RuleConfig)}
+    payload = {key: value for key, value in thresholds.items() if key in allowed}
+    if "excluded_industry_codes" in payload:
+        payload["excluded_industry_codes"] = tuple(payload["excluded_industry_codes"])
+    return RuleConfig(**payload)
+
+
+def _recompute_record(record: dict, as_of: str, config: RuleConfig) -> dict:
+    conflicts = {(record.get("symbol"), quarter) for quarter in record.get("conflicting_quarters", [])}
+    return evaluate_symbol(
+        record.get("symbol", ""),
+        list(record.get("annual_history", [])),
+        record.get("industry"),
+        as_of,
+        config,
+        conflicts,
+    )
+
+
 def validate_result(result: dict) -> dict:
     errors: list[str] = []
     as_of = str(result.get("as_of", ""))
@@ -109,13 +161,19 @@ def validate_result(result: dict) -> dict:
     ).hexdigest()
     if result.get("rule_config_hash") != expected_config_hash:
         errors.append("rule_config_hash does not match thresholds")
+    recompute_config: RuleConfig | None
+    try:
+        recompute_config = _rule_config(thresholds)
+    except (TypeError, ValueError) as exc:
+        errors.append(f"thresholds cannot build a rule config: {exc}")
+        recompute_config = None
     expected_universe_hash = hashlib.sha256(
         "\n".join(sorted(str(symbol) for symbol in symbols)).encode("utf-8")
     ).hexdigest()
     if result.get("universe_hash") != expected_universe_hash:
         errors.append("universe_hash does not match records")
     expected_dataset_hash = hashlib.sha256(
-        f"{as_of}:{SCHEMA_VERSION}:{expected_config_hash}:{expected_universe_hash}:{result.get('source_snapshot', '')}".encode("utf-8")
+        f"{as_of}:{SCHEMA_VERSION}:{RULES_VERSION}:{expected_config_hash}:{expected_universe_hash}:{result.get('source_snapshot', '')}".encode("utf-8")
     ).hexdigest()
     expected_dataset_version = f"{as_of}-{SCHEMA_VERSION}-{expected_dataset_hash[:16]}"
     if result.get("dataset_version") != expected_dataset_version:
@@ -158,6 +216,39 @@ def validate_result(result: dict) -> dict:
     }
     if diagnostics.get("flag_available_counts") != expected_available:
         errors.append("diagnostic flag availability counts do not match records")
+    expected_risk_counts = dict(sorted(Counter(record.get("risk_level") for record in records).items()))
+    if diagnostics.get("risk_level_counts") != expected_risk_counts:
+        errors.append("diagnostic risk level counts do not match records")
+    expected_industry_coverage = sum(bool(record.get("industry")) for record in records)
+    if diagnostics.get("industry_coverage") != expected_industry_coverage:
+        errors.append("diagnostic industry coverage does not match records")
+    expected_financial = sum(record.get("risk_level") == RiskLevel.NOT_APPLICABLE.value for record in records)
+    if diagnostics.get("financial_excluded") != expected_financial:
+        errors.append("diagnostic financial exclusion count does not match records")
+    evaluated_records = [record for record in records if record.get("status") == Status.EVALUATED.value]
+    expected_coverage_mean = (
+        sum(float(record.get("coverage_ratio", 0.0)) for record in evaluated_records) / len(evaluated_records)
+        if evaluated_records
+        else None
+    )
+    if diagnostics.get("evaluated_coverage_mean") != expected_coverage_mean:
+        errors.append("diagnostic evaluated coverage mean does not match records")
+
+    requires_live = result.get("requires_live_validation")
+    data_source = result.get("data_source")
+    if not isinstance(requires_live, bool):
+        errors.append("requires_live_validation must be a boolean")
+    else:
+        # PandaData is the only live source in this contract; any other source
+        # must declare that its output still requires live validation.
+        live_source = data_source == "PandaData"
+        if live_source == requires_live:
+            errors.append(
+                "data_source and requires_live_validation are inconsistent: "
+                "PandaData is the only live source and must set requires_live_validation=false"
+            )
+    if not str(result.get("source_snapshot", "")):
+        errors.append("source_snapshot must be non-empty")
 
     for record in records:
         symbol = record.get("symbol")
@@ -172,7 +263,6 @@ def validate_result(result: dict) -> dict:
         flags = record.get("flags", {})
         if set(flags) != set(FLAG_NAMES):
             errors.append(f"{symbol}: flags keys do not match the rule set")
-            continue
         if any(value not in (True, False, None) for value in flags.values()):
             errors.append(f"{symbol}: flag state must be true/false/null")
         triggered = sum(value is True for value in flags.values())
@@ -217,7 +307,41 @@ def validate_result(result: dict) -> dict:
             errors.append(f"{symbol}: missing required evidence keys")
         if record.get("rule_version") != RULES_VERSION:
             errors.append(f"{symbol}: rule_version does not match runtime")
+        if recompute_config is not None:
+            try:
+                derived = _recompute_record(record, as_of, recompute_config)
+            except Exception as exc:  # noqa: BLE001 - reported, not raised
+                errors.append(f"{symbol}: recomputation failed: {type(exc).__name__}: {exc}")
+            else:
+                for key in RECORD_COMPARE_KEYS:
+                    if derived.get(key) != record.get(key):
+                        errors.append(f"{symbol}: {key} does not match recomputed evidence")
     return {"status": "PASS" if not errors else "FAIL", "errors": errors, "record_count": len(records)}
+
+
+def _close(actual, expected, tolerance: float = 1e-9) -> bool:
+    try:
+        left = float(actual)
+        right = float(expected)
+    except (TypeError, ValueError):
+        return False
+    if math.isnan(right):
+        return math.isnan(left)
+    if math.isnan(left):
+        return False
+    return abs(left - right) <= tolerance
+
+
+def _expected_rank(records: list[dict]) -> dict[str, int]:
+    ranked = sorted(
+        records,
+        key=lambda record: (
+            record.get("status") != Status.EVALUATED.value,
+            -int(record.get("red_flag_count", 0) or 0),
+            str(record.get("symbol")),
+        ),
+    )
+    return {str(record.get("symbol")): index + 1 for index, record in enumerate(ranked)}
 
 
 def validate_production(frame: pd.DataFrame) -> dict:
@@ -240,7 +364,11 @@ def validate_production(frame: pd.DataFrame) -> dict:
         "runtime_versions_json",
         "schema_version",
         "red_flag_count",
+        "available_rule_count",
         "coverage_ratio",
+        "factor_value",
+        "score",
+        "rank",
     }
     missing = sorted(required - set(frame.columns))
     if missing:
@@ -251,32 +379,89 @@ def validate_production(frame: pd.DataFrame) -> dict:
         errors.append("production schema_version does not match runtime")
     if not frame["rules_version"].eq(RULES_VERSION).all():
         errors.append("production rules_version does not match runtime")
-    for row in frame.itertuples(index=False):
-        try:
-            evidence = json.loads(row.evidence_json)
-            metadata = json.loads(row.run_metadata_json)
-            runtime = json.loads(row.runtime_versions_json)
-        except (TypeError, json.JSONDecodeError):
-            errors.append(f"{row.symbol}: invalid JSON evidence or metadata")
+
+    for trade_date, group in frame.groupby("trade_date", sort=False):
+        records: list[dict] = []
+        metadata: dict | None = None
+        runtime: dict | None = None
+        for row in group.itertuples(index=False):
+            try:
+                evidence = json.loads(row.evidence_json)
+                row_metadata = json.loads(row.run_metadata_json)
+                row_runtime = json.loads(row.runtime_versions_json)
+            except (TypeError, json.JSONDecodeError):
+                errors.append(f"{trade_date}/{row.symbol}: invalid JSON evidence or metadata")
+                continue
+            records.append(evidence)
+            if metadata is None:
+                metadata, runtime = row_metadata, row_runtime
+            elif row_metadata != metadata:
+                errors.append(f"{trade_date}/{row.symbol}: run metadata differs within a trade date")
+            if row_metadata.get("as_of") != str(trade_date):
+                errors.append(f"{trade_date}/{row.symbol}: trade_date does not match run metadata as_of")
+            if evidence.get("symbol") != row.symbol or evidence.get("status") != row.status:
+                errors.append(f"{trade_date}/{row.symbol}: row and evidence mismatch")
+            if evidence.get("risk_level") != row.risk_level:
+                errors.append(f"{trade_date}/{row.symbol}: risk_level mismatch between row and evidence")
+            if row.signal != signal_for(row.risk_level):
+                errors.append(f"{trade_date}/{row.symbol}: signal does not match risk_level")
+            if evidence.get("red_flag_count") != row.red_flag_count:
+                errors.append(f"{trade_date}/{row.symbol}: red_flag_count mismatch")
+            if evidence.get("available_rule_count") != row.available_rule_count:
+                errors.append(f"{trade_date}/{row.symbol}: available_rule_count mismatch")
+            if not _close(evidence.get("coverage_ratio"), row.coverage_ratio):
+                errors.append(f"{trade_date}/{row.symbol}: coverage_ratio mismatch")
+            if not _close(row.confidence, evidence.get("coverage_ratio")):
+                errors.append(f"{trade_date}/{row.symbol}: confidence is not the evidence coverage ratio")
+
+            evaluated = evidence.get("status") == Status.EVALUATED.value
+            available = int(evidence.get("available_rule_count") or 0)
+            triggered = int(evidence.get("red_flag_count") or 0)
+            if evaluated:
+                if row.factor_value != triggered:
+                    errors.append(f"{trade_date}/{row.symbol}: factor_value is not the red-flag count")
+                expected_score = triggered / available if available else float("nan")
+                if not _close(row.score, expected_score):
+                    errors.append(f"{trade_date}/{row.symbol}: score is not red-flag count / available rules")
+            else:
+                if not pd.isna(row.factor_value):
+                    errors.append(f"{trade_date}/{row.symbol}: non-evaluated row has a factor_value")
+                if not pd.isna(row.score):
+                    errors.append(f"{trade_date}/{row.symbol}: non-evaluated row has a score")
+
+            for key, value in (
+                ("run_id", row.run_id),
+                ("dataset_version", row.data_version),
+                ("rule_config_hash", row.rule_config_hash),
+                ("source_snapshot", row.source_snapshot),
+            ):
+                if row_metadata.get(key) != value:
+                    errors.append(f"{trade_date}/{row.symbol}: {key} metadata mismatch")
+            if row_runtime.get("panda_data") != row.data_sdk_version:
+                errors.append(f"{trade_date}/{row.symbol}: runtime SDK metadata mismatch")
+
+        if metadata is None:
             continue
-        if evidence.get("symbol") != row.symbol or evidence.get("status") != row.status:
-            errors.append(f"{row.symbol}: row and evidence mismatch")
-        if evidence.get("risk_level") != row.risk_level:
-            errors.append(f"{row.symbol}: risk_level mismatch between row and evidence")
-        if row.signal != signal_for(row.risk_level):
-            errors.append(f"{row.symbol}: signal does not match risk_level")
-        if evidence.get("red_flag_count") != row.red_flag_count:
-            errors.append(f"{row.symbol}: red_flag_count mismatch")
-        for key, value in (
-            ("run_id", row.run_id),
-            ("dataset_version", row.data_version),
-            ("rule_config_hash", row.rule_config_hash),
-            ("source_snapshot", row.source_snapshot),
-        ):
-            if metadata.get(key) != value:
-                errors.append(f"{row.symbol}: {key} metadata mismatch")
-        if runtime.get("panda_data") != row.data_sdk_version:
-            errors.append(f"{row.symbol}: runtime SDK metadata mismatch")
+        rank_by_symbol = _expected_rank(records)
+        for row in group.itertuples(index=False):
+            try:
+                evidence = json.loads(row.evidence_json)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if evidence.get("status") == Status.EVALUATED.value:
+                if int(row.rank) != rank_by_symbol.get(str(row.symbol)):
+                    errors.append(f"{trade_date}/{row.symbol}: rank does not match red-flag ordering")
+            elif not pd.isna(row.rank):
+                errors.append(f"{trade_date}/{row.symbol}: non-evaluated row has a rank")
+
+        # Reconstruct the full run result and re-derive every record from its
+        # own annual history. This is what makes a fully rewritten, internally
+        # consistent row set still fail: the engine must reproduce it exactly.
+        result = dict(metadata)
+        result["records"] = records
+        report = validate_result(result)
+        errors.extend(f"{trade_date}: {error}" for error in report["errors"])
+
     return {"status": "PASS" if not errors else "FAIL", "errors": errors, "record_count": len(frame)}
 
 

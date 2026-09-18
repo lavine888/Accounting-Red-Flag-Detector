@@ -352,6 +352,10 @@ def evaluate_symbol(
     """Evaluate all seven flags and classify risk for one company."""
 
     symbol = clean_symbol(symbol) or str(symbol)
+    # Defensive chronological sort: RF01/RF02/RF03/RF04/RF06 read the last two
+    # rows positionally, so an unsorted caller must not silently change the
+    # answer. The point-in-time loader already sorts, this is belt-and-braces.
+    annual = sorted(annual, key=lambda row: int(row["year"]) if row.get("year") is not None else 0)
     conflicts = conflicts or set()
     own_conflicts = sorted(quarter for item_symbol, quarter in conflicts if item_symbol == symbol)
     global_reasons: list[str] = []

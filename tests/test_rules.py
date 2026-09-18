@@ -338,3 +338,11 @@ def test_evidence_never_fills_missing_with_zero():
     record = _evaluate(rows, {"industry_code": "801080"})
     assert record["evidence"]["operating_cash_flow"] is None
     assert record["evidence"]["cash_conversion_ratio"] is None
+
+
+def test_evaluate_symbol_is_order_insensitive():
+    rows = _clean_series()
+    forward = _evaluate(rows, {"industry_code": "801080", "industry_name": "电子"})
+    backward = _evaluate(list(reversed(rows)), {"industry_code": "801080", "industry_name": "电子"})
+    assert forward == backward
+    assert forward["annual_history"] == backward["annual_history"]

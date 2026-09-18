@@ -118,7 +118,7 @@ accounting_red_flags/
   research/{forward_returns,diagnostics,backtest}.py
 config/rules.yaml
 scripts/{build,validate,backtest}.py
-tests/               148 tests
+tests/               160 tests
 references/          methodology / data guide / source boundary
 production/SKILL.md  production deployment contract
 ```
@@ -132,6 +132,8 @@ python -m pytest -q
 ```
 
 Covers threshold boundaries, missing-value handling, point-in-time selection, same-day revision conflicts, financial exclusion, coverage fail-closed, risk-classification boundaries, Parquet upsert, and adversarial validator tests.
+
+The validator does not merely compare aggregates: it **re-runs the rule engine** over each record's own `annual_history` and `thresholds` and compares all derived fields (`flags`, `flag_details`, `evidence`, coverage, risk level, …). Tampering with counts, risk levels, flags, evidence, annual history, diagnostics, `dataset_version`, row-level `score`/`rank`/`confidence` or source consistency fails validation.
 
 ---
 

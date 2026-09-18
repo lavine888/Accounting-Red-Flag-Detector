@@ -28,13 +28,28 @@ def test_missing_file_falls_back_to_defaults(tmp_path):
     assert config == RuleConfig()
 
 
-def test_version_keys_in_yaml_do_not_override_code(tmp_path):
+def test_version_keys_in_yaml_must_match_code(tmp_path):
     path = tmp_path / "rules.yaml"
     path.write_text("rules_version: '9.9.9'\nschema_version: '9.9.9'\ncoverage_min: 0.7\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="rules_version"):
+        load_rule_config(path)
+
+
+def test_schema_version_mismatch_is_rejected(tmp_path):
+    path = tmp_path / "rules.yaml"
+    path.write_text(f"rules_version: '{RULES_VERSION}'\nschema_version: '9.9.9'\ncoverage_min: 0.7\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="schema_version"):
+        load_rule_config(path)
+
+
+def test_matching_version_keys_are_accepted(tmp_path):
+    path = tmp_path / "rules.yaml"
+    path.write_text(
+        f"rules_version: '{RULES_VERSION}'\nschema_version: '{SCHEMA_VERSION}'\ncoverage_min: 0.7\n",
+        encoding="utf-8",
+    )
     config = load_rule_config(path)
     assert config.coverage_min == 0.7
-    assert RULES_VERSION == "1.0.0"
-    assert SCHEMA_VERSION == "1.0.0"
 
 
 def test_unknown_key_is_rejected(tmp_path):

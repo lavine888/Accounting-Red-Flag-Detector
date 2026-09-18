@@ -125,9 +125,9 @@ python scripts/backtest.py \
 {
   "skill_id": "ARFD-LAVINE",
   "as_of": "20251231",
-  "dataset_version": "20251231-1.0.0-<hash16>",
+  "dataset_version": "20251231-1.1.0-<hash16>",
   "rules_version": "1.0.0",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "rule_config_hash": "<sha256>",
   "source_snapshot": "<sha256>",
   "universe_hash": "<sha256>",
@@ -210,7 +210,7 @@ accounting_red_flags/
     backtest.py          前瞻收益回测
 config/rules.yaml        所有阈值
 scripts/                 build.py / validate.py / backtest.py
-tests/                   148 个测试
+tests/                   160 个测试
 references/              方法论 / 数据指南 / 来源边界
 production/SKILL.md      生产部署契约
 ```
@@ -224,8 +224,12 @@ python -m pytest -q
 ```
 
 覆盖：阈值边界（严格大于 / 小于）、缺失值处理、时点筛选、同日版本冲突、
-金融业排除、覆盖率 fail-closed、风险分级边界、Parquet upsert、校验器对抗性测试
-（篡改计数 / 风险等级 / 未来公告日 / 阈值 / dataset_version）。
+金融业排除、覆盖率 fail-closed、风险分级边界、Parquet upsert、校验器对抗性测试。
+
+校验器不只比对计数：它用记录自带的 `annual_history` 和 `thresholds` **重新运行规则引擎**，
+逐字段重建 `flags`、`flag_details`、`evidence`、覆盖率与风险等级。因此即使同步篡改
+记录与顶层聚合，只要不能完整复现引擎输出，校验仍然失败。对抗性测试覆盖篡改计数 /
+风险等级 / 旗标 / 证据 / 年报历史 / 诊断 / `dataset_version` / 数据来源一致性。
 
 ---
 
